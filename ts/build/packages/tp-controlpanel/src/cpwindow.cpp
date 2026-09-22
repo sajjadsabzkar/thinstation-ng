@@ -2,7 +2,11 @@
 
 #include <QApplication>
 #include <QHBoxLayout>
+#include <QFile>
+#include <QFont>
 #include <QIcon>
+#include <QPainter>
+#include <QPixmap>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -14,15 +18,64 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-// Panel ids double as icon names, so a theme icon is tried first and a
-// generic one is used when the theme has nothing. The image ships a small
-// icon set rather than a full theme, so most lookups land on the fallback.
+// Draws a placeholder icon: the panel's initial on a tinted rounded square,
+// with the tint derived from the name so that each panel keeps the same
+// colour between runs and the grid stays recognisable.
+static QIcon letterIcon(const QString &name)
+{
+    if (name.isEmpty())
+        return QIcon();
+
+    QPixmap pm(48, 48);
+    pm.fill(Qt::transparent);
+
+    // A hue from the name, at a fixed low saturation: distinguishable
+    // without turning the grid into a paint chart.
+    uint h = 0;
+    for (int i = 0; i < name.size(); ++i)
+        h = h * 31 + name.at(i).unicode();
+    const QColor tint = QColor::fromHsv(int(h % 360), 90, 190);
+
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setPen(Qt::NoPen);
+    p.setBrush(tint);
+    p.drawRoundedRect(QRectF(2, 2, 44, 44), 8, 8);
+
+    QFont f = QApplication::font();
+    f.setPixelSize(24);
+    f.setBold(true);
+    p.setFont(f);
+    p.setPen(Qt::white);
+    p.drawText(QRectF(2, 2, 44, 44), Qt::AlignCenter, name.left(1).toUpper());
+    p.end();
+
+    return QIcon(pm);
+}
+
+// Panel ids double as icon names. A real icon is preferred, from the theme
+// or from the package's own directory; the target image carries no icon
+// theme at all, so without the drawn fallback every entry would be a name
+// floating over an empty square.
 static QIcon panelIcon(const PanelEntry &e)
 {
-    QIcon icon = QIcon::fromTheme(e.icon);
-    if (icon.isNull())
-        icon = QIcon::fromTheme(QLatin1String("preferences-system"));
-    return icon;
+    if (!e.icon.isEmpty()) {
+        QIcon icon = QIcon::fromTheme(e.icon);
+        if (!icon.isNull() && !icon.availableSizes().isEmpty())
+            return icon;
+
+        // A bare file beside the .desktop files, ThinPro style: some of its
+        // entries name a .png outright instead of a theme icon.
+        const QString dir = QLatin1String("/etc/tp/control-panel/icons/");
+        for (int i = 0; i < 3; ++i) {
+            static const char *ext[] = { ".png", ".svg", "" };
+            const QString path = dir + e.icon + QLatin1String(ext[i]);
+            if (QFile::exists(path))
+                return QIcon(path);
+        }
+    }
+
+    return letterIcon(e.name);
 }
 
 CpWindow::CpWindow(const PanelIndex &index, bool adminMode, QWidget *parent)

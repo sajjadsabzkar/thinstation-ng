@@ -1,0 +1,39 @@
+#!/bin/sh
+# Applies root/desktop/* -- background and interface scale.
+
+. /etc/tp/panels/common 2>/dev/null
+
+BG=`tpreg get root/desktop/background`
+STYLE=`tpreg get root/desktop/backgroundStyle`
+SCALE=`tpreg get root/desktop/fontScale`
+
+case "$BG" in
+"")	;;
+\#*)	xsetroot -solid "$BG" 2>/dev/null ;;
+*)	if [ -r "$BG" ]; then
+		# feh is the only image setter the lite session carries; fall
+		# back to a flat colour rather than leaving a grey X root.
+		case "$STYLE" in
+		center)		mode=--bg-center ;;
+		tile)		mode=--bg-tile ;;
+		fit)		mode=--bg-max ;;
+		*)		mode=--bg-scale ;;
+		esac
+		feh $mode "$BG" 2>/dev/null || xsetroot -solid "#2e3436" 2>/dev/null
+	else
+		echo "Background image '$BG' cannot be read." >&2
+		xsetroot -solid "#2e3436" 2>/dev/null
+	fi
+	;;
+esac
+
+# Qt picks this up from the environment at startup, so it lands on the next
+# application launch and on the next login for the session itself.
+if [ -n "$SCALE" ] && [ "$SCALE" != "100" ]; then
+	factor=`awk "BEGIN { printf \"%.2f\", $SCALE / 100 }" 2>/dev/null`
+	runtime_set QT_SCALE_FACTOR "$factor"
+else
+	runtime_set QT_SCALE_FACTOR 1
+fi
+
+exit 0

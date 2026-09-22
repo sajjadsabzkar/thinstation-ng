@@ -1,7 +1,12 @@
 #!/bin/sh
 
 export PACKAGE=fonts-TTF-liberation
-export PORTS="R-fontLiberation liberation-mono-fonts liberation-narrow-fonts liberation-sans-fonts liberation-serif-fonts"
+# R-fontLiberation was in this list upstream. It is the Liberation fonts
+# repackaged for the R language, and asking dnf for it drags in R-core,
+# openblas, flexiblas and libgfortran -- several hundred megabytes of
+# numerical computing for a thin client that already gets the same glyphs
+# from the four liberation-*-fonts packages below.
+export PORTS="liberation-mono-fonts liberation-narrow-fonts liberation-sans-fonts liberation-serif-fonts"
 repackage -e
 
 returnval=$?

@@ -1,0 +1,13 @@
+package:
+  name: "tp-controlpanel"
+  category: "Desktop"
+  priority: 32
+  has-sessions: false
+  visible: true
+  dependencies:
+    - "base"
+    - "tp-registry"
+    - "qt5-min"
+    - "xorg7"
+
+options: []

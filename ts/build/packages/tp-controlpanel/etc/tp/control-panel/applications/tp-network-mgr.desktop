@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Network
+Comment=Addressing, DNS and host name
+Icon=network
+Exec=sudo tp-panel network
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+X-TP-ExecAsRoot=/usr/bin/tp-panel
+Keywords=wired;dhcp;static;dns;ip;

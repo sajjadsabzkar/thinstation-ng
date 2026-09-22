@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sound
+Comment=Output and microphone volume
+Icon=sound
+Exec=tp-panel sound
+Terminal=false
+Categories=config-panel
+X-TP-Category=Hardware
+Keywords=volume;audio;alsa;mute;microphone;

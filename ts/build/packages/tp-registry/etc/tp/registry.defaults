@@ -96,3 +96,331 @@ root/FieldSpec/options/type=text
 root/FieldSpec/options/hint=Passed through to the client unchanged
 
 # Every type gets an 'options' escape hatch, same idea as ThinPro's ExtraArgs.
+
+# ---------------------------------------------------------------------------
+# Control panel definitions
+#
+# HP ThinPro ships 36 config-panel plugins under /usr/lib/manticore/config-
+# panels, one shared object each. Every one of them is a form over a handful
+# of registry keys, so here a panel is described rather than compiled: the
+# fields below are rendered by tp-panel and applied by /etc/tp/panels/<id>.apply.
+# The panel ids and titles follow the names ThinPro uses so that anyone who
+# knows that product finds the same things in the same places.
+# ---------------------------------------------------------------------------
+
+# --- Sound (ThinPro: hptc-mixer, "Sound", icon 'sound', Hardware) ----------
+root/ControlPanel/sound/title=Sound
+root/ControlPanel/sound/fields=masterVolume mute micVolume micMute outputDevice
+root/ControlPanel/sound/fields/masterVolume/label=Output volume
+root/ControlPanel/sound/fields/masterVolume/type=slider
+root/ControlPanel/sound/fields/masterVolume/key=root/audio/masterVolume
+root/ControlPanel/sound/fields/masterVolume/min=0
+root/ControlPanel/sound/fields/masterVolume/max=100
+root/ControlPanel/sound/fields/masterVolume/step=5
+root/ControlPanel/sound/fields/masterVolume/unit=%
+root/ControlPanel/sound/fields/masterVolume/default=70
+root/ControlPanel/sound/fields/mute/label=Mute output
+root/ControlPanel/sound/fields/mute/type=bool
+root/ControlPanel/sound/fields/mute/key=root/audio/mute
+root/ControlPanel/sound/fields/mute/default=0
+root/ControlPanel/sound/fields/micVolume/label=Microphone volume
+root/ControlPanel/sound/fields/micVolume/type=slider
+root/ControlPanel/sound/fields/micVolume/key=root/audio/micVolume
+root/ControlPanel/sound/fields/micVolume/min=0
+root/ControlPanel/sound/fields/micVolume/max=100
+root/ControlPanel/sound/fields/micVolume/step=5
+root/ControlPanel/sound/fields/micVolume/unit=%
+root/ControlPanel/sound/fields/micVolume/default=60
+root/ControlPanel/sound/fields/micMute/label=Mute microphone
+root/ControlPanel/sound/fields/micMute/type=bool
+root/ControlPanel/sound/fields/micMute/key=root/audio/micMute
+root/ControlPanel/sound/fields/micMute/default=0
+root/ControlPanel/sound/fields/outputDevice/label=Output device
+root/ControlPanel/sound/fields/outputDevice/type=choice
+root/ControlPanel/sound/fields/outputDevice/key=root/audio/outputDevice
+root/ControlPanel/sound/fields/outputDevice/choicesCommand=aplay -l 2>/dev/null | sed -n 's/^card \([0-9]*\): \([^ ]*\) .*/\1:\2/p'
+root/ControlPanel/sound/fields/outputDevice/hint=Leave empty for the default card
+
+# --- USB Manager (ThinPro: hptc-usb-mgr, "USB Manager", Hardware) ----------
+# ThinPro's panel decides, per device class, whether a USB device is mounted
+# locally on the client or redirected into the remote session. Same idea here.
+root/ControlPanel/usb/title=USB Manager
+root/ControlPanel/usb/fields=protocol allowMassStorage massStorageReadOnly allowPrinter allowAudio allowSmartcard allowOther
+root/ControlPanel/usb/fields/protocol/label=Redirect USB devices through
+root/ControlPanel/usb/fields/protocol/type=choice
+root/ControlPanel/usb/fields/protocol/key=root/usb/protocol
+root/ControlPanel/usb/fields/protocol/choices=local|freerdp|ica|horizon
+root/ControlPanel/usb/fields/protocol/default=local
+root/ControlPanel/usb/fields/protocol/hint=local keeps devices on the client
+root/ControlPanel/usb/fields/allowMassStorage/label=Allow mass storage
+root/ControlPanel/usb/fields/allowMassStorage/type=bool
+root/ControlPanel/usb/fields/allowMassStorage/key=root/usb/class/massStorage
+root/ControlPanel/usb/fields/allowMassStorage/default=1
+root/ControlPanel/usb/fields/massStorageReadOnly/label=Mount mass storage read-only
+root/ControlPanel/usb/fields/massStorageReadOnly/type=bool
+root/ControlPanel/usb/fields/massStorageReadOnly/key=root/usb/massStorageReadOnly
+root/ControlPanel/usb/fields/massStorageReadOnly/default=0
+root/ControlPanel/usb/fields/allowPrinter/label=Allow printers
+root/ControlPanel/usb/fields/allowPrinter/type=bool
+root/ControlPanel/usb/fields/allowPrinter/key=root/usb/class/printer
+root/ControlPanel/usb/fields/allowPrinter/default=1
+root/ControlPanel/usb/fields/allowAudio/label=Allow audio devices
+root/ControlPanel/usb/fields/allowAudio/type=bool
+root/ControlPanel/usb/fields/allowAudio/key=root/usb/class/audio
+root/ControlPanel/usb/fields/allowAudio/default=1
+root/ControlPanel/usb/fields/allowSmartcard/label=Allow smart card readers
+root/ControlPanel/usb/fields/allowSmartcard/type=bool
+root/ControlPanel/usb/fields/allowSmartcard/key=root/usb/class/smartcard
+root/ControlPanel/usb/fields/allowSmartcard/default=1
+root/ControlPanel/usb/fields/allowOther/label=Allow other device classes
+root/ControlPanel/usb/fields/allowOther/type=bool
+root/ControlPanel/usb/fields/allowOther/key=root/usb/class/other
+root/ControlPanel/usb/fields/allowOther/default=0
+
+# --- Customization Center (ThinPro: hptc-user-rights, Appearance) ----------
+# This is where kiosk mode lives. ThinPro has no single "kiosk" key either:
+# switch-config sets PRODUCT_CONFIG=zero in /etc/systeminfo and turns on
+# autostart and autoReconnect on the default connection, all at once. The
+# mode field below is our switch-config, and the .apply hook does the rest.
+root/ControlPanel/customization/title=Customization Center
+root/ControlPanel/customization/fields=mode launchConnectionManager allowUserEdit allowUserAdd showTaskbar defaultConnection
+root/ControlPanel/customization/fields/mode/label=Product configuration
+root/ControlPanel/customization/fields/mode/type=choice
+root/ControlPanel/customization/fields/mode/key=root/product/config
+root/ControlPanel/customization/fields/mode/choices=standard|zero
+root/ControlPanel/customization/fields/mode/default=standard
+root/ControlPanel/customization/fields/mode/hint=zero is kiosk: one connection, full screen, no desktop
+root/ControlPanel/customization/fields/launchConnectionManager/label=Show the connection manager at login
+root/ControlPanel/customization/fields/launchConnectionManager/type=bool
+root/ControlPanel/customization/fields/launchConnectionManager/key=root/users/user/launchConnectionManager
+root/ControlPanel/customization/fields/launchConnectionManager/default=1
+root/ControlPanel/customization/fields/allowUserEdit/label=Let the user edit connections
+root/ControlPanel/customization/fields/allowUserEdit/type=bool
+root/ControlPanel/customization/fields/allowUserEdit/key=root/ConnectionManager/allowUserEdit
+root/ControlPanel/customization/fields/allowUserEdit/default=1
+root/ControlPanel/customization/fields/allowUserAdd/label=Let the user create connections
+root/ControlPanel/customization/fields/allowUserAdd/type=bool
+root/ControlPanel/customization/fields/allowUserAdd/key=root/ConnectionManager/allowUserAdd
+root/ControlPanel/customization/fields/allowUserAdd/default=1
+root/ControlPanel/customization/fields/showTaskbar/label=Show the taskbar
+root/ControlPanel/customization/fields/showTaskbar/type=bool
+root/ControlPanel/customization/fields/showTaskbar/key=root/desktop/showTaskbar
+root/ControlPanel/customization/fields/showTaskbar/default=1
+root/ControlPanel/customization/fields/defaultConnection/label=Default connection
+root/ControlPanel/customization/fields/defaultConnection/type=choice
+root/ControlPanel/customization/fields/defaultConnection/key=root/ConnectionManager/defaultConnection
+root/ControlPanel/customization/fields/defaultConnection/choicesCommand=tpreg connections 2>/dev/null
+root/ControlPanel/customization/fields/defaultConnection/hint=Started automatically in zero configuration
+
+# --- Look and Feel (ThinPro: hptc-look-feel, Appearance) -------------------
+root/ControlPanel/lookfeel/title=Look and Feel
+root/ControlPanel/lookfeel/fields=background backgroundStyle fontScale
+root/ControlPanel/lookfeel/fields/background/label=Desktop colour or image
+root/ControlPanel/lookfeel/fields/background/type=text
+root/ControlPanel/lookfeel/fields/background/key=root/desktop/background
+root/ControlPanel/lookfeel/fields/background/default=#2e3436
+root/ControlPanel/lookfeel/fields/background/hint=A #rrggbb colour or a path to an image
+root/ControlPanel/lookfeel/fields/backgroundStyle/label=Image placement
+root/ControlPanel/lookfeel/fields/backgroundStyle/type=choice
+root/ControlPanel/lookfeel/fields/backgroundStyle/key=root/desktop/backgroundStyle
+root/ControlPanel/lookfeel/fields/backgroundStyle/choices=center|tile|stretch|fit
+root/ControlPanel/lookfeel/fields/backgroundStyle/default=stretch
+root/ControlPanel/lookfeel/fields/fontScale/label=Interface scale
+root/ControlPanel/lookfeel/fields/fontScale/type=choice
+root/ControlPanel/lookfeel/fields/fontScale/key=root/desktop/fontScale
+root/ControlPanel/lookfeel/fields/fontScale/choices=100|125|150|200
+root/ControlPanel/lookfeel/fields/fontScale/default=100
+root/ControlPanel/lookfeel/fields/fontScale/hint=Percent, applied at the next login
+
+# --- Display (ThinPro: hptc-display-prefs, Hardware) -----------------------
+root/ControlPanel/display/title=Display
+root/ControlPanel/display/fields=output resolution rotation blankAfter
+root/ControlPanel/display/fields/output/label=Output
+root/ControlPanel/display/fields/output/type=choice
+root/ControlPanel/display/fields/output/key=root/display/output
+root/ControlPanel/display/fields/output/choicesCommand=xrandr --query 2>/dev/null | sed -n 's/^\([^ ]*\) connected.*/\1/p'
+root/ControlPanel/display/fields/resolution/label=Resolution
+root/ControlPanel/display/fields/resolution/type=choice
+root/ControlPanel/display/fields/resolution/key=root/display/resolution
+root/ControlPanel/display/fields/resolution/choicesCommand=xrandr --query 2>/dev/null | sed -n 's/^   \([0-9]*x[0-9]*\) .*/\1/p' | awk '!seen[$0]++'
+root/ControlPanel/display/fields/resolution/hint=Empty means leave it to the driver
+root/ControlPanel/display/fields/rotation/label=Rotation
+root/ControlPanel/display/fields/rotation/type=choice
+root/ControlPanel/display/fields/rotation/key=root/display/rotation
+root/ControlPanel/display/fields/rotation/choices=normal|left|right|inverted
+root/ControlPanel/display/fields/rotation/default=normal
+root/ControlPanel/display/fields/blankAfter/label=Blank the screen after
+root/ControlPanel/display/fields/blankAfter/type=int
+root/ControlPanel/display/fields/blankAfter/key=root/display/blankAfter
+root/ControlPanel/display/fields/blankAfter/min=0
+root/ControlPanel/display/fields/blankAfter/max=120
+root/ControlPanel/display/fields/blankAfter/step=5
+root/ControlPanel/display/fields/blankAfter/unit=min
+root/ControlPanel/display/fields/blankAfter/default=15
+
+# --- Keyboard (ThinPro: hptc-keyboard-layout, Input Devices) ---------------
+root/ControlPanel/keyboard/title=Keyboard
+root/ControlPanel/keyboard/fields=layout variant model repeatDelay repeatRate
+root/ControlPanel/keyboard/fields/layout/label=Layout
+root/ControlPanel/keyboard/fields/layout/type=choice
+root/ControlPanel/keyboard/fields/layout/key=root/keyboard/layout
+root/ControlPanel/keyboard/fields/layout/choicesCommand=sed -n '/^! layout/,/^$/p' /usr/share/X11/xkb/rules/base.lst 2>/dev/null | awk 'NR>1 && NF {print $1}'
+root/ControlPanel/keyboard/fields/layout/default=us
+root/ControlPanel/keyboard/fields/variant/label=Variant
+root/ControlPanel/keyboard/fields/variant/type=text
+root/ControlPanel/keyboard/fields/variant/key=root/keyboard/variant
+root/ControlPanel/keyboard/fields/model/label=Model
+root/ControlPanel/keyboard/fields/model/type=text
+root/ControlPanel/keyboard/fields/model/key=root/keyboard/model
+root/ControlPanel/keyboard/fields/model/default=pc105
+root/ControlPanel/keyboard/fields/repeatDelay/label=Repeat delay
+root/ControlPanel/keyboard/fields/repeatDelay/type=int
+root/ControlPanel/keyboard/fields/repeatDelay/key=root/keyboard/repeatDelay
+root/ControlPanel/keyboard/fields/repeatDelay/min=100
+root/ControlPanel/keyboard/fields/repeatDelay/max=2000
+root/ControlPanel/keyboard/fields/repeatDelay/step=50
+root/ControlPanel/keyboard/fields/repeatDelay/unit=ms
+root/ControlPanel/keyboard/fields/repeatDelay/default=500
+root/ControlPanel/keyboard/fields/repeatRate/label=Repeat rate
+root/ControlPanel/keyboard/fields/repeatRate/type=int
+root/ControlPanel/keyboard/fields/repeatRate/key=root/keyboard/repeatRate
+root/ControlPanel/keyboard/fields/repeatRate/min=1
+root/ControlPanel/keyboard/fields/repeatRate/max=60
+root/ControlPanel/keyboard/fields/repeatRate/unit=/s
+root/ControlPanel/keyboard/fields/repeatRate/default=30
+
+# --- Mouse (ThinPro: hptc-mouse, Input Devices) ----------------------------
+root/ControlPanel/mouse/title=Mouse
+root/ControlPanel/mouse/fields=leftHanded acceleration threshold doubleClick
+root/ControlPanel/mouse/fields/leftHanded/label=Swap the buttons for left-handed use
+root/ControlPanel/mouse/fields/leftHanded/type=bool
+root/ControlPanel/mouse/fields/leftHanded/key=root/mouse/leftHanded
+root/ControlPanel/mouse/fields/leftHanded/default=0
+root/ControlPanel/mouse/fields/acceleration/label=Pointer acceleration
+root/ControlPanel/mouse/fields/acceleration/type=slider
+root/ControlPanel/mouse/fields/acceleration/key=root/mouse/acceleration
+root/ControlPanel/mouse/fields/acceleration/min=1
+root/ControlPanel/mouse/fields/acceleration/max=10
+root/ControlPanel/mouse/fields/acceleration/default=2
+root/ControlPanel/mouse/fields/threshold/label=Acceleration threshold
+root/ControlPanel/mouse/fields/threshold/type=int
+root/ControlPanel/mouse/fields/threshold/key=root/mouse/threshold
+root/ControlPanel/mouse/fields/threshold/min=0
+root/ControlPanel/mouse/fields/threshold/max=20
+root/ControlPanel/mouse/fields/threshold/default=4
+root/ControlPanel/mouse/fields/doubleClick/label=Double-click interval
+root/ControlPanel/mouse/fields/doubleClick/type=int
+root/ControlPanel/mouse/fields/doubleClick/key=root/mouse/doubleClick
+root/ControlPanel/mouse/fields/doubleClick/min=100
+root/ControlPanel/mouse/fields/doubleClick/max=1000
+root/ControlPanel/mouse/fields/doubleClick/step=50
+root/ControlPanel/mouse/fields/doubleClick/unit=ms
+root/ControlPanel/mouse/fields/doubleClick/default=400
+
+# --- Date and Time (ThinPro: hptc-date-mgr, System) ------------------------
+root/ControlPanel/datetime/title=Date and Time
+root/ControlPanel/datetime/fields=timezone useNtp ntpServer clockFormat currentTime
+root/ControlPanel/datetime/fields/timezone/label=Time zone
+root/ControlPanel/datetime/fields/timezone/type=choice
+root/ControlPanel/datetime/fields/timezone/key=root/time/timezone
+root/ControlPanel/datetime/fields/timezone/choicesCommand=find /usr/share/zoneinfo/posix -type f 2>/dev/null | sed 's|/usr/share/zoneinfo/posix/||' | sort
+root/ControlPanel/datetime/fields/timezone/default=UTC
+root/ControlPanel/datetime/fields/useNtp/label=Set the clock from a time server
+root/ControlPanel/datetime/fields/useNtp/type=bool
+root/ControlPanel/datetime/fields/useNtp/key=root/time/useNtp
+root/ControlPanel/datetime/fields/useNtp/default=1
+root/ControlPanel/datetime/fields/ntpServer/label=Time server
+root/ControlPanel/datetime/fields/ntpServer/type=text
+root/ControlPanel/datetime/fields/ntpServer/key=root/time/ntpServer
+root/ControlPanel/datetime/fields/ntpServer/default=pool.ntp.org
+root/ControlPanel/datetime/fields/clockFormat/label=Clock
+root/ControlPanel/datetime/fields/clockFormat/type=choice
+root/ControlPanel/datetime/fields/clockFormat/key=root/time/clockFormat
+root/ControlPanel/datetime/fields/clockFormat/choices=24h|12h
+root/ControlPanel/datetime/fields/clockFormat/default=24h
+root/ControlPanel/datetime/fields/currentTime/label=Right now
+root/ControlPanel/datetime/fields/currentTime/type=info
+root/ControlPanel/datetime/fields/currentTime/valueCommand=date
+
+# --- Network (ThinPro: hptc-network-mgr, System) ---------------------------
+root/ControlPanel/network/title=Network
+root/ControlPanel/network/fields=hostname method address netmask gateway dns1 dns2 currentAddress
+root/ControlPanel/network/fields/hostname/label=Host name
+root/ControlPanel/network/fields/hostname/type=text
+root/ControlPanel/network/fields/hostname/key=root/network/hostname
+root/ControlPanel/network/fields/method/label=Addressing
+root/ControlPanel/network/fields/method/type=choice
+root/ControlPanel/network/fields/method/key=root/network/method
+root/ControlPanel/network/fields/method/choices=dhcp|static
+root/ControlPanel/network/fields/method/default=dhcp
+root/ControlPanel/network/fields/address/label=IP address
+root/ControlPanel/network/fields/address/type=text
+root/ControlPanel/network/fields/address/key=root/network/address
+root/ControlPanel/network/fields/address/hint=Only used when addressing is static
+root/ControlPanel/network/fields/netmask/label=Netmask
+root/ControlPanel/network/fields/netmask/type=text
+root/ControlPanel/network/fields/netmask/key=root/network/netmask
+root/ControlPanel/network/fields/netmask/default=255.255.255.0
+root/ControlPanel/network/fields/gateway/label=Gateway
+root/ControlPanel/network/fields/gateway/type=text
+root/ControlPanel/network/fields/gateway/key=root/network/gateway
+root/ControlPanel/network/fields/dns1/label=Primary DNS
+root/ControlPanel/network/fields/dns1/type=text
+root/ControlPanel/network/fields/dns1/key=root/network/dns1
+root/ControlPanel/network/fields/dns2/label=Secondary DNS
+root/ControlPanel/network/fields/dns2/type=text
+root/ControlPanel/network/fields/dns2/key=root/network/dns2
+root/ControlPanel/network/fields/currentAddress/label=Current address
+root/ControlPanel/network/fields/currentAddress/type=info
+root/ControlPanel/network/fields/currentAddress/valueCommand=ip -4 -o addr show scope global 2>/dev/null | awk '{print $2": "$4}'
+
+# --- Security (ThinPro: hptc-security, Security) ---------------------------
+root/ControlPanel/security/title=Security
+root/ControlPanel/security/fields=mustLogin enableUserPassword adminTimeout allowSsh
+root/ControlPanel/security/fields/mustLogin/label=Require a login before the desktop
+root/ControlPanel/security/fields/mustLogin/type=bool
+root/ControlPanel/security/fields/mustLogin/key=root/security/mustLogin
+root/ControlPanel/security/fields/mustLogin/default=0
+root/ControlPanel/security/fields/enableUserPassword/label=Give the user account a password
+root/ControlPanel/security/fields/enableUserPassword/type=bool
+root/ControlPanel/security/fields/enableUserPassword/key=root/users/user/enablePassword
+root/ControlPanel/security/fields/enableUserPassword/default=0
+root/ControlPanel/security/fields/adminTimeout/label=Leave administrator mode after
+root/ControlPanel/security/fields/adminTimeout/type=int
+root/ControlPanel/security/fields/adminTimeout/key=root/users/root/timeout
+root/ControlPanel/security/fields/adminTimeout/min=0
+root/ControlPanel/security/fields/adminTimeout/max=120
+root/ControlPanel/security/fields/adminTimeout/step=5
+root/ControlPanel/security/fields/adminTimeout/unit=min
+root/ControlPanel/security/fields/adminTimeout/default=0
+root/ControlPanel/security/fields/adminTimeout/hint=0 never leaves it on its own
+root/ControlPanel/security/fields/allowSsh/label=Allow incoming SSH
+root/ControlPanel/security/fields/allowSsh/type=bool
+root/ControlPanel/security/fields/allowSsh/key=root/security/allowSsh
+root/ControlPanel/security/fields/allowSsh/default=0
+
+# --- System Information (ThinPro: hptc-sysinfo, Advanced) ------------------
+# Read-only: every field is filled by a command and nothing is written back.
+root/ControlPanel/sysinfo/title=System Information
+root/ControlPanel/sysinfo/fields=product kernel cpu memory storage macAddress uptime
+root/ControlPanel/sysinfo/fields/product/label=Image
+root/ControlPanel/sysinfo/fields/product/type=info
+root/ControlPanel/sysinfo/fields/product/valueCommand=. /etc/thinstation.global 2>/dev/null; echo "${TS_NAME:-ThinStation} ${TSVER:-}"
+root/ControlPanel/sysinfo/fields/kernel/label=Kernel
+root/ControlPanel/sysinfo/fields/kernel/type=info
+root/ControlPanel/sysinfo/fields/kernel/valueCommand=uname -rm
+root/ControlPanel/sysinfo/fields/cpu/label=Processor
+root/ControlPanel/sysinfo/fields/cpu/type=info
+root/ControlPanel/sysinfo/fields/cpu/valueCommand=sed -n 's/^model name[ \t]*: //p' /proc/cpuinfo | head -1
+root/ControlPanel/sysinfo/fields/memory/label=Memory
+root/ControlPanel/sysinfo/fields/memory/type=info
+root/ControlPanel/sysinfo/fields/memory/valueCommand=free -m | awk '/^Mem:/ {print $3" MB used of "$2" MB"}'
+root/ControlPanel/sysinfo/fields/storage/label=Storage
+root/ControlPanel/sysinfo/fields/storage/type=info
+root/ControlPanel/sysinfo/fields/storage/valueCommand=df -h / 2>/dev/null | awk 'NR==2 {print $3" used of "$2}'
+root/ControlPanel/sysinfo/fields/macAddress/label=MAC address
+root/ControlPanel/sysinfo/fields/macAddress/type=info
+root/ControlPanel/sysinfo/fields/macAddress/valueCommand=ip -o link show 2>/dev/null | awk '$2!="lo:" {print $2" "$(NF-2)}' | head -3
+root/ControlPanel/sysinfo/fields/uptime/label=Uptime
+root/ControlPanel/sysinfo/fields/uptime/type=info
+root/ControlPanel/sysinfo/fields/uptime/valueCommand=uptime -p 2>/dev/null || uptime

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=USB Manager
+Comment=Whether USB devices stay local or are redirected into the session
+Icon=usb
+Exec=sudo tp-panel usb
+Terminal=false
+Categories=config-panel
+X-TP-Category=Hardware
+X-TP-ExecAsRoot=/usr/bin/tp-panel
+Keywords=USBR;USB Redirection;Protocol;Devices;Classes;

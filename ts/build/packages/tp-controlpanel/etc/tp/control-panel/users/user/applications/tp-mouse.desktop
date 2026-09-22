@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Mouse
+Comment=Buttons, acceleration and double-click
+Icon=mouse
+Exec=tp-panel mouse
+Terminal=false
+Categories=config-panel
+X-TP-Category=Input Devices
+Keywords=pointer;left-handed;acceleration;

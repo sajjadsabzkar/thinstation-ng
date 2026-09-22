@@ -1,0 +1,49 @@
+#!/bin/sh
+# Applies the Customization Center, which is where kiosk mode lives.
+#
+# This is our switch-config. On ThinPro that script is what actually turns a
+# unit into a Smart Zero: it writes PRODUCT_CONFIG=zero into /etc/systeminfo
+# and, in the same breath, turns on autostart and autoReconnect for the
+# default connection. Kiosk is never one key there and it is not one key
+# here either -- picking "zero" below is what ties the pieces together.
+
+. /etc/tp/panels/common 2>/dev/null
+
+CONFIG=`tpreg get root/product/config`
+[ -n "$CONFIG" ] || CONFIG=standard
+
+DEFAULT=`tpreg get root/ConnectionManager/defaultConnection`
+
+# The session scripts read these out of the runtime layer.
+runtime_set PRODUCT_CONFIG "$CONFIG"
+runtime_set SHOW_TASKBAR "`tpreg get root/desktop/showTaskbar`"
+runtime_set LAUNCH_CONNECTION_MANAGER "`tpreg get root/users/user/launchConnectionManager`"
+
+if [ "$CONFIG" = "zero" ]; then
+	# A kiosk has exactly one connection and no way out of it.
+	if [ -n "$DEFAULT" ]; then
+		TYPE=`tpreg get "root/ConnectionManager/connections/$DEFAULT/type"`
+		if [ -n "$TYPE" ]; then
+			NODE="root/ConnectionType/$TYPE/connections/$DEFAULT"
+			tpreg set "$NODE/autostart" 1
+			tpreg set "$NODE/autoReconnect" 1
+			tpreg set "$NODE/windowType" full
+		fi
+	fi
+
+	# Without a default connection there is nothing to start, and a kiosk
+	# with an empty screen is worse than a desktop. Say so on stderr; the
+	# panel shows it.
+	if [ -z "$DEFAULT" ]; then
+		echo "Zero configuration needs a default connection; none is set." >&2
+	fi
+
+	tpreg set root/users/user/kioskMode 1
+	tpreg set root/desktop/showTaskbar 0
+	runtime_set SHOW_TASKBAR 0
+else
+	tpreg set root/users/user/kioskMode 0
+fi
+
+notify_session
+exit 0

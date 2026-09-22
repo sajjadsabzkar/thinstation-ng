@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Connection Manager
+Comment=Create and start remote sessions
+Icon=connection-mgr
+Exec=tp-connmgr
+Terminal=false
+Categories=config-panel
+X-TP-Category=Advanced
+Keywords=rdp;citrix;horizon;web;connection;session;

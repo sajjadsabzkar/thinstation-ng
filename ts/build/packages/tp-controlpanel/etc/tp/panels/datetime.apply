@@ -1,0 +1,36 @@
+#!/bin/sh
+# Applies root/time/* -- time zone and time server.
+#
+# Runs as root: the .desktop entry carries X-TP-ExecAsRoot.
+
+. /etc/tp/panels/common 2>/dev/null
+
+TZ_NAME=`tpreg get root/time/timezone`
+USE_NTP=`tpreg get root/time/useNtp`
+NTP=`tpreg get root/time/ntpServer`
+
+if [ -n "$TZ_NAME" ] && [ -r "/usr/share/zoneinfo/$TZ_NAME" ]; then
+	# /etc is a tmpfs copy at runtime, so this is writable even though the
+	# image root is not.
+	ln -sf "/usr/share/zoneinfo/$TZ_NAME" /etc/localtime 2>/dev/null
+	echo "$TZ_NAME" > /etc/timezone 2>/dev/null
+	runtime_set TIME_ZONE "$TZ_NAME"
+elif [ -n "$TZ_NAME" ]; then
+	echo "No zoneinfo for '$TZ_NAME'." >&2
+	exit 1
+fi
+
+if is_true "$USE_NTP" && [ -n "$NTP" ]; then
+	runtime_set NTP_SERVER "$NTP"
+	# One shot now, so the user sees the clock move; whatever daemon the
+	# image carries keeps it there afterwards.
+	if command -v ntpdate >/dev/null 2>&1; then
+		ntpdate -u "$NTP" >/dev/null 2>&1 &
+	elif command -v chronyc >/dev/null 2>&1; then
+		chronyc -a makestep >/dev/null 2>&1 &
+	elif command -v sntp >/dev/null 2>&1; then
+		sntp -S "$NTP" >/dev/null 2>&1 &
+	fi
+fi
+
+exit 0

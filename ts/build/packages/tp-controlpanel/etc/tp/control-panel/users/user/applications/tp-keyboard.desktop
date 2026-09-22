@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Keyboard
+Comment=Layout and key repeat
+Icon=keyboard
+Exec=tp-panel keyboard
+Terminal=false
+Categories=config-panel
+X-TP-Category=Input Devices
+Keywords=layout;xkb;repeat;

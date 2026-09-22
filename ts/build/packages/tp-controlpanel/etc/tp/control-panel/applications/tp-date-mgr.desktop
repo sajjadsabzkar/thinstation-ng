@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Date and Time
+Comment=Time zone and time server
+Icon=clock
+Exec=sudo tp-panel datetime
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+X-TP-ExecAsRoot=/usr/bin/tp-panel
+Keywords=timezone;ntp;clock;

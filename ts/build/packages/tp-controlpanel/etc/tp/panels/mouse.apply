@@ -1,0 +1,27 @@
+#!/bin/sh
+# Applies root/mouse/* with xset and xmodmap.
+
+. /etc/tp/panels/common 2>/dev/null
+
+ACCEL=`tpreg get root/mouse/acceleration`
+THRESH=`tpreg get root/mouse/threshold`
+LEFT=`tpreg get root/mouse/leftHanded`
+DCLICK=`tpreg get root/mouse/doubleClick`
+
+if [ -n "$ACCEL" ] && [ -n "$THRESH" ]; then
+	xset m "$ACCEL" "$THRESH" 2>/dev/null
+fi
+
+# xmodmap is the portable way to swap buttons; a three-button map is right
+# for the mice these clients ship with, and a wheel mouse keeps 4 and 5.
+if is_true "$LEFT"; then
+	xmodmap -e "pointer = 3 2 1 4 5 6 7 8 9 10 11 12" 2>/dev/null
+else
+	xmodmap -e "pointer = default" 2>/dev/null
+fi
+
+# Qt reads the double-click interval at startup, so this only affects
+# applications launched from now on.
+[ -n "$DCLICK" ] && runtime_set MOUSE_DOUBLE_CLICK "$DCLICK"
+
+exit 0

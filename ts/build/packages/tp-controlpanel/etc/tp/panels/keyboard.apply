@@ -1,0 +1,28 @@
+#!/bin/sh
+# Applies root/keyboard/* with setxkbmap and xset.
+
+. /etc/tp/panels/common 2>/dev/null
+
+LAYOUT=`tpreg get root/keyboard/layout`
+VARIANT=`tpreg get root/keyboard/variant`
+MODEL=`tpreg get root/keyboard/model`
+DELAY=`tpreg get root/keyboard/repeatDelay`
+RATE=`tpreg get root/keyboard/repeatRate`
+
+if [ -n "$LAYOUT" ]; then
+	set -- -layout "$LAYOUT"
+	[ -n "$VARIANT" ] && set -- "$@" -variant "$VARIANT"
+	[ -n "$MODEL" ] && set -- "$@" -model "$MODEL"
+
+	if ! setxkbmap "$@" 2>/dev/null; then
+		echo "setxkbmap did not accept layout '$LAYOUT'." >&2
+		exit 1
+	fi
+	runtime_set KEYBOARD "$LAYOUT"
+fi
+
+if [ -n "$DELAY" ] && [ -n "$RATE" ]; then
+	xset r rate "$DELAY" "$RATE" 2>/dev/null
+fi
+
+exit 0

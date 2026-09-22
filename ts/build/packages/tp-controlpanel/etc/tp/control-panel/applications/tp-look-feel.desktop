@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Look and Feel
+Comment=Desktop background and interface scale
+Icon=palette
+Exec=tp-panel lookfeel
+Terminal=false
+Categories=config-panel
+X-TP-Category=Appearance
+Keywords=background;theme;scale;wallpaper;

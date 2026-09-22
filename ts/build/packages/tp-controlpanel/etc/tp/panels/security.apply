@@ -1,0 +1,45 @@
+#!/bin/sh
+# Applies root/security/* and the account flags under root/users/*.
+#
+# This hook never sets a password. Enabling the flag only records that the
+# account should have one; the password itself is collected separately, so
+# that a password never travels through a registry file.
+
+. /etc/tp/panels/common 2>/dev/null
+
+MUST_LOGIN=`tpreg get root/security/mustLogin`
+USER_PW=`tpreg get root/users/user/enablePassword`
+TIMEOUT=`tpreg get root/users/root/timeout`
+ALLOW_SSH=`tpreg get root/security/allowSsh`
+
+if is_true "$MUST_LOGIN"; then
+	runtime_set MUST_LOGIN on
+else
+	runtime_set MUST_LOGIN off
+fi
+
+if is_true "$USER_PW"; then
+	runtime_set USER_PASSWORD_REQUIRED on
+	# An account that is supposed to need a password but has none would
+	# let anyone in, which is worse than the setting being off.
+	if command -v passwd >/dev/null 2>&1; then
+		status=`passwd -S user 2>/dev/null | awk '{print $2}'`
+		if [ "$status" = "NP" ] || [ "$status" = "L" ]; then
+			echo "The user account still has no password; set one before relying on this." >&2
+		fi
+	fi
+else
+	runtime_set USER_PASSWORD_REQUIRED off
+fi
+
+[ -n "$TIMEOUT" ] && runtime_set ADMIN_MODE_TIMEOUT "$TIMEOUT"
+
+if is_true "$ALLOW_SSH"; then
+	runtime_set SSHD on
+	systemctl enable --now sshd 2>/dev/null || /etc/init.d/sshd start 2>/dev/null
+else
+	runtime_set SSHD off
+	systemctl disable --now sshd 2>/dev/null || /etc/init.d/sshd stop 2>/dev/null
+fi
+
+exit 0

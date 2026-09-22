@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=System Information
+Comment=What this client is and what it is running
+Icon=info
+Exec=tp-panel sysinfo
+Terminal=false
+Categories=config-panel
+X-TP-Category=Advanced
+Keywords=about;version;cpu;memory;mac;

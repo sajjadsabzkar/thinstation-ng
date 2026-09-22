@@ -1,0 +1,35 @@
+# Sourced by every /etc/tp/panels/*.apply hook.
+#
+# Deliberately tiny: the hooks run as often as someone clicks Apply, and on a
+# 1 GB client that is not the place to source thinstation.global and drag in
+# the whole runtime environment.
+
+is_true() {
+	case "`echo "$1" | tr 'A-Z' 'a-z'`" in
+	1|on|true|yes|enabled)	return 0 ;;
+	*)			return 1 ;;
+	esac
+}
+
+# Writes KEY=value into $TS_RUNTIME so the rest of the ThinStation runtime
+# sees what the control panel changed. The runtime file is append-only by
+# convention, so drop any earlier line for the same key first.
+runtime_set() {
+	key="$1"
+	value="$2"
+	file="${TS_RUNTIME:-/etc/thinstation.runtime}"
+
+	[ -w "`dirname $file`" ] || return 0
+	if [ -e "$file" ]; then
+		grep -v "^${key}=" "$file" > "$file.tmp" 2>/dev/null
+		mv "$file.tmp" "$file"
+	fi
+	echo "${key}=${value}" >> "$file"
+}
+
+# Best-effort notification to a running session. Nothing depends on it.
+notify_session() {
+	[ -e /run/tp-session.pid ] || return 0
+	kill -USR1 "`cat /run/tp-session.pid`" 2>/dev/null
+	return 0
+}

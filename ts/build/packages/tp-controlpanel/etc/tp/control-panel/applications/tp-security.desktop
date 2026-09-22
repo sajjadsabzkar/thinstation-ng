@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Security
+Comment=Login requirements and administrator mode
+Icon=key
+Exec=sudo tp-panel security
+Terminal=false
+Categories=config-panel
+X-TP-Category=Security
+X-TP-ExecAsRoot=/usr/bin/tp-panel
+Keywords=password;login;admin;ssh;

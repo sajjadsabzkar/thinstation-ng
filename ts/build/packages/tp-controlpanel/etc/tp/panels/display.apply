@@ -1,0 +1,42 @@
+#!/bin/sh
+# Applies root/display/* with xrandr and xset.
+#
+# An unusable mode is the one setting that can lock a user out of their own
+# screen, so a failed xrandr is reported rather than swallowed: the panel
+# keeps the saved value but tells the user it did not take.
+
+. /etc/tp/panels/common 2>/dev/null
+
+OUTPUT=`tpreg get root/display/output`
+RES=`tpreg get root/display/resolution`
+ROT=`tpreg get root/display/rotation`
+BLANK=`tpreg get root/display/blankAfter`
+
+if [ -z "$OUTPUT" ]; then
+	OUTPUT=`xrandr --query 2>/dev/null | sed -n 's/^\([^ ]*\) connected.*/\1/p' | head -1`
+fi
+
+if [ -n "$OUTPUT" ] && [ -n "$RES$ROT" ]; then
+	set -- --output "$OUTPUT"
+	[ -n "$RES" ] && set -- "$@" --mode "$RES"
+	[ -n "$ROT" ] && set -- "$@" --rotate "$ROT"
+
+	if ! xrandr "$@" 2>/dev/null; then
+		echo "xrandr rejected ${RES:-the current mode} on $OUTPUT." >&2
+		exit 1
+	fi
+fi
+
+if [ -n "$BLANK" ]; then
+	# xset takes seconds; the panel collects minutes because nobody thinks
+	# about screen blanking in seconds.
+	seconds=`expr "$BLANK" \* 60 2>/dev/null` || seconds=0
+	xset s "$seconds" "$seconds" 2>/dev/null
+	if [ "$seconds" = "0" ]; then
+		xset -dpms 2>/dev/null
+	else
+		xset +dpms dpms "$seconds" "$seconds" "$seconds" 2>/dev/null
+	fi
+fi
+
+exit 0

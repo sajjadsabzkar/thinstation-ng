@@ -1,0 +1,57 @@
+#!/bin/sh
+# Applies root/audio/* to the running mixer.
+#
+# amixer control names differ between cards: a USB headset has "Speaker" and
+# "Mic" where an HDA codec has "Master" and "Capture". Try each name in turn
+# and treat "no such control" as nothing to do rather than as a failure,
+# otherwise the panel would report an error on every machine that happens to
+# lack one of them.
+
+. /etc/tp/panels/common 2>/dev/null
+
+CARD=`tpreg get root/audio/outputDevice 2>/dev/null | cut -d: -f1`
+[ -n "$CARD" ] && CARDOPT="-c $CARD" || CARDOPT=""
+
+set_control() {
+	control="$1"
+	value="$2"
+	amixer $CARDOPT -q sset "$control" "$value" 2>/dev/null
+}
+
+VOL=`tpreg get root/audio/masterVolume`
+MUTE=`tpreg get root/audio/mute`
+MICVOL=`tpreg get root/audio/micVolume`
+MICMUTE=`tpreg get root/audio/micMute`
+
+if [ -n "$VOL" ]; then
+	for c in Master PCM Speaker Headphone; do
+		set_control "$c" "${VOL}%" && break
+	done
+fi
+
+if [ -n "$MUTE" ]; then
+	if is_true "$MUTE"; then state=mute; else state=unmute; fi
+	for c in Master PCM Speaker Headphone; do
+		set_control "$c" "$state" && break
+	done
+fi
+
+if [ -n "$MICVOL" ]; then
+	for c in Capture Mic "Internal Mic"; do
+		set_control "$c" "${MICVOL}%" && break
+	done
+fi
+
+if [ -n "$MICMUTE" ]; then
+	if is_true "$MICMUTE"; then state=nocap; else state=cap; fi
+	for c in Capture Mic "Internal Mic"; do
+		set_control "$c" "$state" && break
+	done
+fi
+
+# Keep the settings across a reboot on images that have alsactl.
+if [ -w /etc/asound.state ] || [ -w /etc ]; then
+	alsactl store 2>/dev/null
+fi
+
+exit 0

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Display
+Comment=Resolution, rotation and screen blanking
+Icon=monitor
+Exec=tp-panel display
+Terminal=false
+Categories=config-panel
+X-TP-Category=Hardware
+Keywords=resolution;monitor;xrandr;rotation;

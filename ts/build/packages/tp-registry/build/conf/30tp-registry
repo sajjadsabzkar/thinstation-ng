@@ -1,0 +1,44 @@
+
+##
+# --- Connection Registry Options
+#
+# The connection registry holds connection definitions the way HP ThinPro's
+# Manticore registry does, but as two flat files and no daemon:
+#
+#   /etc/tp/registry.defaults   shipped in the image, read-only
+#   /etc/tp/registry.conf       written at runtime, overrides the defaults
+#
+# Keys are path shaped and match ThinPro's layout, so ThinPro admin knowledge
+# carries over:
+#
+#   root/ConnectionType/<type>/coreSettings/<key>
+#   root/ConnectionType/<type>/connections/<uuid>/<key>
+#   root/ConnectionManager/defaultConnection
+#   root/users/user/<key>
+#
+# Inspect or change it at runtime with 'tpreg':
+#
+#   tpreg types
+#   tpreg connections
+#   tpreg newconn freerdp "Office PC"
+#   tpreg set root/ConnectionType/freerdp/connections/<uuid>/address srv.local
+#   tpreg dump
+#
+# TP_REGISTRY_PERSIST   If set, the runtime registry is kept across reboots by
+#                       listing it in persistent-files. Requires the
+#                       persistent-files package and writable local storage.
+#                       Without it, connections added by the user are lost on
+#                       reboot and only the shipped defaults survive.
+#
+#TP_REGISTRY_PERSIST=on
+
+##
+# --- Connection Manager Options
+#
+# LAUNCH_CONNECTION_MANAGER  Show the connection manager at session start.
+#                            Equivalent to ThinPro's
+#                            root/users/user/launchConnectionManager.
+#                            Set to off when a single connection autostarts
+#                            and no chooser should appear.
+#
+#LAUNCH_CONNECTION_MANAGER=on

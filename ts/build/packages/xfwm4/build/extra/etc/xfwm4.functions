@@ -38,6 +38,13 @@ make_desktop()
 
 xfconf_settings()
 {
+	# In 'wm' session mode xfconfd is not running, so every xfconf-query below
+	# would fail. Nothing in that mode reads these settings anyway - the
+	# connection manager is the shell, not xfdesktop/xfce4-panel.
+	case "`make_caps $XFWM4_SESSION`" in
+	WM|LITE|MINIMAL)	return 0 ;;
+	esac
+
 #	xfconf-query -c xfce4-notifyd -p /applications/known_applications -a -t string -s "xfce4-settings-helper" --create
 #	xfconf-query -c xfce4-notifyd -p /applications/known_applications -a -t string -s "Xfce volume control"
 #	xfconf-query -c xfce4-notifyd -p /applications/known_applications -a -t string -s "org.freedesktop.network-manager-applet"

@@ -1,5 +1,23 @@
 
 ##
+# --- Session Mode
+# XFWM4_SESSION                    Selects how much of XFCE is started.
+#                                  desktop  (default) startxfce4 - the full XFCE
+#                                           session: xfwm4 plus xfce4-panel,
+#                                           xfdesktop, xfce4-session and xfconf.
+#                                  wm       xfwm4 alone, with the connection
+#                                           manager as the shell. No panel, no
+#                                           desktop icons, no session manager,
+#                                           no xfconf daemon. This is the mode
+#                                           to use on low-memory clients; it is
+#                                           how ThinPro composes a session.
+#                                  Most XFWM4_* options below only apply to
+#                                  'desktop'; 'wm' honours the background colour
+#                                  options and ignores panel and theme settings.
+#
+#XFWM4_SESSION=desktop
+
+##
 # XFWM4_COMPOSITING                Boolean that determines whether or not to enable
 #                                  desktop compositing
 # XFWM4_BRIGHTNESS                 Sets the brightness level of the background

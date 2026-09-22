@@ -1,0 +1,248 @@
+#!/bin/bash
+# Description: ThinPro-style configuration registry for ThinStation
+# URL: http://www.thinstation.org
+#
+# A flat key/value store with path-shaped keys, modelled on the ThinPro
+# Manticore registry but without a daemon. Two layers are merged on read:
+#
+#   $TP_DEFAULTS  shipped in the image, read-only     (/etc/tp/registry.defaults)
+#   $TP_REGISTRY  written at runtime, persistent      (/etc/tp/registry.conf)
+#
+# A key present in the user layer wins. Deleting a key that only exists in
+# the defaults layer records a tombstone, otherwise the default would come
+# straight back on the next read.
+#
+# Key shape follows ThinPro exactly, so the layout is familiar:
+#   root/ConnectionType/<type>/coreSettings/<key>
+#   root/ConnectionType/<type>/connections/<uuid>/<key>
+#   root/ConnectionManager/defaultConnection
+#   root/users/<user>/<key>
+
+: ${TP_DEFAULTS:=/etc/tp/registry.defaults}
+: ${TP_REGISTRY:=/etc/tp/registry.conf}
+
+TOMBSTONE=$'\001deleted'
+
+showhelp()
+{
+	echo "
+Usage: tpreg <command> [arguments]
+
+  get <key>                 Print a value. Exits 1 if the key is unset.
+  set <key> <value>         Write a value to the user layer.
+  del <key>                 Remove a key. Tombstoned if it has a default.
+  has <key>                 Exit 0 if the key exists, 1 otherwise.
+  test <key> <value>        Exit 0 if the key equals value.
+
+  list [prefix]             Print 'key=value' for every key under prefix.
+  keys [prefix]             Print full key paths under prefix.
+  dirs <prefix>             Print the immediate child node names of prefix.
+
+  types                     List connection type ids.
+  connections [type]        List connection uuids, as '<uuid> <type> <label>'.
+  newconn <type> [label]    Create a connection, print its uuid.
+  delconn <uuid>            Delete a connection and all of its keys.
+
+  uuid                      Generate a uuid.
+  dump                      Print the whole merged registry, sorted.
+
+Environment:
+  TP_DEFAULTS   $TP_DEFAULTS
+  TP_REGISTRY   $TP_REGISTRY
+"
+}
+
+# Keys and values are separated by the first '=' only, so values may
+# contain '=' freely. Neither may contain a newline.
+esc_key()
+{
+	# Make a key safe to use as a literal in a grep -E pattern.
+	echo "$1" | sed -e 's/[][\\.^$*+?(){}|/]/\\&/g'
+}
+
+ensure_store()
+{
+	if [ ! -e "$TP_REGISTRY" ]; then
+		mkdir -p "`dirname $TP_REGISTRY`"
+		: > "$TP_REGISTRY"
+		chmod 0600 "$TP_REGISTRY"
+	fi
+}
+
+# Print the raw value of a key from one file, last occurrence wins.
+raw_get()
+{
+	local file="$1" key="$2"
+	if [ ! -e "$file" ]; then return 1; fi
+	local hit="`grep -E \"^$(esc_key \"$key\")=\" \"$file\" 2>/dev/null | tail -n1`"
+	if [ -z "$hit" ]; then return 1; fi
+	echo "${hit#*=}"
+	return 0
+}
+
+cmd_get()
+{
+	local key="$1" val
+	if val="`raw_get \"$TP_REGISTRY\" \"$key\"`"; then
+		if [ "$val" == "$TOMBSTONE" ]; then return 1; fi
+		echo "$val"
+		return 0
+	fi
+	if val="`raw_get \"$TP_DEFAULTS\" \"$key\"`"; then
+		echo "$val"
+		return 0
+	fi
+	return 1
+}
+
+cmd_set()
+{
+	local key="$1" value="$2"
+	if [ -z "$key" ]; then echo "tpreg: set needs a key" >&2; return 2; fi
+	case "$key$value" in
+	*$'\n'*) echo "tpreg: newlines are not allowed" >&2; return 2;;
+	esac
+	ensure_store
+	local tmp="$TP_REGISTRY.$$"
+	grep -Ev "^`esc_key \"$key\"`=" "$TP_REGISTRY" > "$tmp" 2>/dev/null
+	echo "$key=$value" >> "$tmp"
+	chmod 0600 "$tmp"
+	mv -f "$tmp" "$TP_REGISTRY"
+}
+
+cmd_del()
+{
+	local key="$1"
+	ensure_store
+	local tmp="$TP_REGISTRY.$$"
+	grep -Ev "^`esc_key \"$key\"`=" "$TP_REGISTRY" > "$tmp" 2>/dev/null
+	# Only tombstone if the defaults layer would otherwise resurrect it.
+	if raw_get "$TP_DEFAULTS" "$key" >/dev/null; then
+		echo "$key=$TOMBSTONE" >> "$tmp"
+	fi
+	chmod 0600 "$tmp"
+	mv -f "$tmp" "$TP_REGISTRY"
+}
+
+# Merged view: defaults first, then the user layer overriding it.
+merged()
+{
+	{
+		[ -e "$TP_DEFAULTS" ] && grep -v '^[[:space:]]*#' "$TP_DEFAULTS" | grep '='
+		[ -e "$TP_REGISTRY" ] && grep -v '^[[:space:]]*#' "$TP_REGISTRY" | grep '='
+	} 2>/dev/null | awk -F= '
+		{ k = $1; sub(/^[^=]*=/, "", $0); v[k] = $0; order[k] = NR }
+		END { for (k in v) if (v[k] != "\001deleted") printf "%s=%s\n", k, v[k] }
+	' | sort
+}
+
+cmd_list()
+{
+	local prefix="$1"
+	if [ -z "$prefix" ]; then
+		merged
+	else
+		merged | grep -E "^`esc_key \"$prefix\"`"
+	fi
+}
+
+cmd_keys()
+{
+	cmd_list "$1" | sed -e 's/=.*//'
+}
+
+# Immediate children of a node, e.g. 'dirs root/ConnectionType' -> freerdp2, ica, ...
+cmd_dirs()
+{
+	local prefix="${1%/}" epfx
+	epfx="`esc_key \"$prefix\"`"
+	cmd_keys "$prefix/" | sed -e "s|^$epfx/||" -e 's|/.*||' -e 's|=.*||' | sort -u
+}
+
+cmd_uuid()
+{
+	if [ -e /proc/sys/kernel/random/uuid ]; then
+		cat /proc/sys/kernel/random/uuid
+	elif which uuidgen >/dev/null 2>&1; then
+		uuidgen
+	else
+		# Last resort: time plus pid, formatted like a uuid.
+		printf '%08x-%04x-4%03x-8%03x-%012x\n' \
+			$((`date +%s`)) $((RANDOM & 0xffff)) $((RANDOM & 0xfff)) \
+			$((RANDOM & 0xfff)) $((`date +%N` + $$))
+	fi
+}
+
+cmd_types()
+{
+	cmd_dirs root/ConnectionType
+}
+
+cmd_connections()
+{
+	local type="$1" t u label
+	for t in `if [ -n "$type" ]; then echo "$type"; else cmd_types; fi`; do
+		for u in `cmd_dirs "root/ConnectionType/$t/connections"`; do
+			label="`cmd_get \"root/ConnectionType/$t/connections/$u/label\"`"
+			echo "$u $t $label"
+		done
+	done
+}
+
+cmd_newconn()
+{
+	local type="$1" label="$2" uuid base
+	if [ -z "$type" ]; then echo "tpreg: newconn needs a type" >&2; return 2; fi
+	if ! cmd_get "root/ConnectionType/$type/coreSettings/label" >/dev/null; then
+		echo "tpreg: unknown connection type '$type'" >&2
+		return 1
+	fi
+	if [ -z "$label" ]; then
+		label="`cmd_get \"root/ConnectionType/$type/coreSettings/newLabel\"`"
+		if [ -z "$label" ]; then label="New Connection"; fi
+	fi
+	uuid="`cmd_uuid`"
+	base="root/ConnectionType/$type/connections/$uuid"
+	cmd_set "$base/label" "$label"
+	cmd_set "$base/autostart" "0"
+	cmd_set "$base/autoReconnect" "0"
+	cmd_set "$base/waitForNetwork" "1"
+	echo "$uuid"
+}
+
+cmd_delconn()
+{
+	local uuid="$1" key tmp euuid
+	if [ -z "$uuid" ]; then echo "tpreg: delconn needs a uuid" >&2; return 2; fi
+	ensure_store
+	euuid="`esc_key \"$uuid\"`"
+	tmp="$TP_REGISTRY.$$"
+	grep -Ev "/connections/$euuid/" "$TP_REGISTRY" > "$tmp" 2>/dev/null
+	# Tombstone any keys this uuid still has in the defaults layer.
+	if [ -e "$TP_DEFAULTS" ]; then
+		for key in `grep -oE "^[^=]*/connections/$euuid/[^=]*" "$TP_DEFAULTS" 2>/dev/null`; do
+			echo "$key=$TOMBSTONE" >> "$tmp"
+		done
+	fi
+	chmod 0600 "$tmp"
+	mv -f "$tmp" "$TP_REGISTRY"
+}
+
+case "$1" in
+get)		shift; cmd_get "$@" ;;
+set)		shift; cmd_set "$@" ;;
+del)		shift; cmd_del "$@" ;;
+has)		shift; cmd_get "$1" >/dev/null ;;
+test)		shift; [ "`cmd_get \"$1\"`" == "$2" ] ;;
+list)		shift; cmd_list "$@" ;;
+keys)		shift; cmd_keys "$@" ;;
+dirs)		shift; cmd_dirs "$@" ;;
+types)		shift; cmd_types ;;
+connections)	shift; cmd_connections "$@" ;;
+newconn)	shift; cmd_newconn "$@" ;;
+delconn)	shift; cmd_delconn "$@" ;;
+uuid)		shift; cmd_uuid ;;
+dump)		shift; merged ;;
+-h|--help|help|"")	showhelp ;;
+*)		echo "tpreg: unknown command '$1'" >&2; showhelp; exit 2 ;;
+esac

@@ -1,0 +1,23 @@
+package:
+  name: "tp-registry"
+  category: "Connections"
+  priority: 30
+  has-sessions: false
+  visible: true
+  dependencies:
+    - "base"
+
+options:
+  - name: "TP_REGISTRY_PERSIST"
+    description: "Keep runtime connection definitions across reboots. Needs persistent-files and writable local storage."
+    type: "boolean"
+    true_value: "on"
+    false_value: "off"
+    default: false
+
+  - name: "LAUNCH_CONNECTION_MANAGER"
+    description: "Show the connection manager at session start. Turn off when a single connection autostarts."
+    type: "boolean"
+    true_value: "on"
+    false_value: "off"
+    default: true

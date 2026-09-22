@@ -1,1 +1,22 @@
-CMD_GLOBAL="startxfce4"
+# XFWM4_SESSION selects how much of XFCE comes up.
+#
+#   desktop  startxfce4 - the full XFCE session: xfwm4 plus xfce4-panel,
+#            xfdesktop, xfce4-session and xfconf. This is the historical
+#            ThinStation behaviour and stays the default.
+#
+#   wm       xfwm4 alone. No panel, no desktop icons, no session manager and
+#            no xfconf daemon. Intended for low-memory clients where the
+#            connection manager is the shell, the way ThinPro uses
+#            hptc-kiosk instead of a desktop.
+#
+# Anything unset or unrecognised falls back to 'desktop' so existing
+# build.conf files keep working unchanged.
+
+case "`make_caps $XFWM4_SESSION`" in
+WM|LITE|MINIMAL)
+	CMD_GLOBAL="tp-wm-session"
+	;;
+*)
+	CMD_GLOBAL="startxfce4"
+	;;
+esac

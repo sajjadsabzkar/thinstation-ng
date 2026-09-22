@@ -1,0 +1,63 @@
+# ThinPro-style connection registry - shipped defaults
+#
+# This file is read-only at runtime. Anything written with 'tpreg set' goes to
+# the user layer (/etc/tp/registry.conf) and overrides what is here.
+#
+# Labels and key names deliberately mirror HP ThinPro 8.1 so that admin
+# knowledge transfers. Type ids are ThinStation package names, because the
+# connection wrappers dispatch through ThinStation's 'pkg' command.
+#
+#   ThinPro type   ->  type id here   ThinStation package
+#   freerdp2           freerdp         freerdp
+#   xen                ica             ica
+#   view               horizon         horizon
+#   firefox            firefox         firefox
+
+# --- Connection Manager -----------------------------------------------------
+root/ConnectionManager/defaultConnection=
+root/ConnectionManager/createSampleConnections=1
+
+# --- User rights (same semantics as ThinPro) --------------------------------
+root/users/user/launchConnectionManager=1
+root/users/user/hideDesktopPanel=0
+root/users/user/switchAdmin=1
+
+# --- RDP --------------------------------------------------------------------
+root/ConnectionType/freerdp/coreSettings/label=FreeRDP 2
+root/ConnectionType/freerdp/coreSettings/newLabel=New RDP
+root/ConnectionType/freerdp/coreSettings/package=freerdp
+root/ConnectionType/freerdp/coreSettings/icon=freerdp
+root/ConnectionType/freerdp/coreSettings/serverRequired=required
+root/ConnectionType/freerdp/coreSettings/priority=10
+root/ConnectionType/freerdp/coreSettings/loginfields=server username password domain
+root/ConnectionType/freerdp/coreSettings/fields=label address username domain windowType autostart autoReconnect waitForNetwork
+
+# --- Citrix -----------------------------------------------------------------
+root/ConnectionType/ica/coreSettings/label=Citrix Workspace
+root/ConnectionType/ica/coreSettings/newLabel=New Citrix Workspace
+root/ConnectionType/ica/coreSettings/package=ica
+root/ConnectionType/ica/coreSettings/icon=ica
+root/ConnectionType/ica/coreSettings/serverRequired=required
+root/ConnectionType/ica/coreSettings/priority=20
+root/ConnectionType/ica/coreSettings/loginfields=server username password domain
+root/ConnectionType/ica/coreSettings/fields=label address username domain autostart autoReconnect waitForNetwork
+
+# --- VMware Horizon ---------------------------------------------------------
+root/ConnectionType/horizon/coreSettings/label=VMware Horizon View
+root/ConnectionType/horizon/coreSettings/newLabel=New VMware Horizon View
+root/ConnectionType/horizon/coreSettings/package=horizon
+root/ConnectionType/horizon/coreSettings/icon=horizon
+root/ConnectionType/horizon/coreSettings/serverRequired=optional
+root/ConnectionType/horizon/coreSettings/priority=30
+root/ConnectionType/horizon/coreSettings/loginfields=server username password domain
+root/ConnectionType/horizon/coreSettings/fields=label address username domain autostart autoReconnect waitForNetwork
+
+# --- Web browser ------------------------------------------------------------
+root/ConnectionType/firefox/coreSettings/label=Web Browser
+root/ConnectionType/firefox/coreSettings/newLabel=New Web Browser
+root/ConnectionType/firefox/coreSettings/package=firefox
+root/ConnectionType/firefox/coreSettings/icon=firefox
+root/ConnectionType/firefox/coreSettings/serverRequired=optional
+root/ConnectionType/firefox/coreSettings/priority=40
+root/ConnectionType/firefox/coreSettings/loginfields=
+root/ConnectionType/firefox/coreSettings/fields=label address kioskMode autostart autoReconnect waitForNetwork

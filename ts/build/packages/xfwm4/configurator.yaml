@@ -9,6 +9,14 @@ package:
 
 
 options:
+  - name: "XFWM4_SESSION"
+    description: "How much of XFCE to start. 'desktop' is the full XFCE session; 'wm' is xfwm4 alone with the connection manager as the shell, for low-memory clients."
+    type: "list"
+    options:
+      - "desktop:Full XFCE session with panel and desktop icons."
+      - "wm:Window manager only. Connection manager acts as the shell."
+    default: "desktop"
+
   - name: "XFWM4_COMPOSITING"
     description: "Enable or disable desktop compositing."
     type: "boolean"

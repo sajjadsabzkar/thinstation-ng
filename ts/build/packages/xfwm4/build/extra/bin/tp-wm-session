@@ -1,0 +1,49 @@
+#!/bin/bash
+# Lightweight X session: xfwm4 as a plain window manager, with the connection
+# manager acting as the shell. Selected by XFWM4_SESSION=wm in thinstation.conf.
+#
+# This mirrors how ThinPro composes a session - a window manager plus
+# hptc-kiosk - rather than bringing up a full desktop environment. Compared
+# with startxfce4 it leaves out xfce4-panel, xfdesktop, xfce4-session and
+# xfconfd, which is most of the memory cost on a 1 GB client.
+
+. /etc/thinstation.global
+
+# --- window manager ---------------------------------------------------------
+# Started in the background and waited on at the end, so the session lives
+# exactly as long as the WM does. Deliberately NOT --daemon: that forks and
+# would leave us with nothing to wait on.
+xfwm4 --compositor=off &
+wm_pid=$!
+
+# --- background ------------------------------------------------------------
+# xfdesktop normally paints the root window. Without it the root window is
+# left at the X default stipple, so set something plain instead.
+if [ -n "$XFWM4_RED$XFWM4_GREEN$XFWM4_BLUE" ]; then
+	printf -v bg "#%02x%02x%02x" \
+		"${XFWM4_RED:-0}" "${XFWM4_GREEN:-0}" "${XFWM4_BLUE:-0}"
+	xsetroot -solid "$bg" 2>/dev/null
+else
+	xsetroot -solid "#2e3436" 2>/dev/null
+fi
+
+if [ -n "$BACKGROUND_IMAGE" ] && which feh >/dev/null 2>&1; then
+	feh --bg-scale "$BACKGROUND_IMAGE" 2>/dev/null
+fi
+
+# --- connection manager -----------------------------------------------------
+# Same gate as ThinPro's 92hptc-kiosk: only auto-launch when the user right
+# says so. Without it the session is just a bare WM, which is what you want
+# when a single connection is set to autostart.
+if which tp-connmgr >/dev/null 2>&1; then
+	if [ "`tpreg get root/users/user/launchConnectionManager 2>/dev/null`" == "1" ]; then
+		tp-connmgr &
+	fi
+fi
+
+# --- autostart connections --------------------------------------------------
+if which tp-autostart >/dev/null 2>&1; then
+	tp-autostart &
+fi
+
+wait $wm_pid

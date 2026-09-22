@@ -1,0 +1,12 @@
+package:
+  name: "qt5-min"
+  category: "Libraries"
+  priority: 20
+  has-sessions: false
+  visible: false
+  dependencies:
+    - "base"
+    - "xorg7"
+    - "fontconfig"
+
+options: []

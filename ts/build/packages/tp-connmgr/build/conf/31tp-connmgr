@@ -1,0 +1,37 @@
+
+##
+# --- Connection Manager Options
+#
+# tp-connmgr is the connection chooser. It is the ThinStation equivalent of
+# ThinPro's Connection Manager (the binary ThinPro confusingly calls
+# hptc-kiosk) and, in a 'wm' session, it is the shell: there is no panel and
+# no desktop, so this window is what the user sees.
+#
+# It is started from tp-wm-session when
+# root/users/user/launchConnectionManager is 1. Set LAUNCH_CONNECTION_MANAGER
+# in the tp-registry package's section to change that.
+#
+# Connections themselves live in the registry, not here. Manage them with the
+# GUI, or from a shell with tpreg:
+#
+#   tpreg newconn freerdp "Office PC"
+#   tpreg set root/ConnectionType/freerdp/connections/<uuid>/address srv.local
+#
+# --- Kiosk presentation
+#
+# root/users/<user>/kioskMode   When 1, the chooser is frameless, full screen
+#                               and has no Add/Edit/Delete or Close. The user
+#                               can pick a connection and nothing else.
+#
+#                               Note: ThinPro has a key at this same path but
+#                               documents it as internal and reserved. Here it
+#                               is a real, supported setting.
+#
+#   tpreg set root/users/user/kioskMode 1
+#
+# --- Who may edit connections
+#
+# root/users/<user>/switchAdmin When 0, Add/Edit/Delete are hidden even
+#                               outside kiosk mode. Connections then come
+#                               only from the shipped defaults or from a
+#                               management system.

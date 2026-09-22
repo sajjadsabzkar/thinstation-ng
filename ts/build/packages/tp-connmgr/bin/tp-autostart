@@ -1,0 +1,37 @@
+#!/bin/bash
+# Description: Start every connection marked autostart in the tp-registry
+#
+# The equivalent of ThinPro's autostartmgr. Like it, this does nothing in
+# administrator mode: an admin logging in to fix a client should not have
+# connections launching underneath them.
+
+. /etc/thinstation.global
+
+if [ -e /var/run/tp-admin ]; then
+	logger -t tp-autostart "administrative mode, not launching autostart connections"
+	exit 0
+fi
+
+for t in `tpreg types`; do
+	for uuid in `tpreg dirs "root/ConnectionType/$t/connections"`; do
+		node="root/ConnectionType/$t/connections/$uuid"
+
+		tpreg test "$node/autostart" 1 || continue
+
+		if tpreg test "$node/waitForNetwork" 1; then
+			# find_network comes from thinstation.functions and is what
+			# every ThinStation package uses before dialling out.
+			if ! find_network; then
+				logger -t tp-autostart "no network, skipping `tpreg get $node/label`"
+				continue
+			fi
+		fi
+
+		logger -t tp-autostart "autostarting `tpreg get $node/label`"
+		tp-launch "$uuid" &
+
+		# Stagger launches so several connections do not all hit the
+		# network and the X server at the same instant.
+		sleep 1
+	done
+done

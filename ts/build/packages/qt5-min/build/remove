@@ -1,0 +1,4 @@
+#!/bin/sh
+
+export PACKAGE="qt5-min"
+repackage -c

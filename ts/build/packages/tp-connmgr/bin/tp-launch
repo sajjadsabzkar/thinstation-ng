@@ -1,0 +1,93 @@
+#!/bin/bash
+# Description: Launch a connection from the tp-registry by uuid
+#
+# Resolves a connection out of the registry and hands it to ThinStation's
+# own dispatcher. This is the equivalent of ThinPro's <type>_wrapper.sh,
+# except that instead of driving the client binary directly it reuses
+# ThinStation's per-package launch logic:
+#
+#   pkg <mode> <package> [server] [options] [workspace] [user] [pass_enable] [gate] [gate_user]
+#
+# That keeps every ThinStation package's existing dialog, reconnect and
+# status handling working unchanged.
+
+. /etc/thinstation.global
+
+usage()
+{
+	echo "Usage: tp-launch <uuid> [mode]"
+	echo
+	echo "  mode defaults to 'fullscreen', or 'window' when the connection's"
+	echo "  windowType field says so. Valid modes are the ones"
+	echo "  /etc/thinstation.packages accepts: auto, auto_window,"
+	echo "  auto_fullscreen, console, menu, window, fullscreen."
+	exit 2
+}
+
+uuid="$1"
+mode="$2"
+[ -z "$uuid" ] && usage
+
+# Find which type owns this uuid.
+type=""
+for t in `tpreg types`; do
+	if tpreg has "root/ConnectionType/$t/connections/$uuid/label"; then
+		type="$t"
+		break
+	fi
+done
+
+if [ -z "$type" ]; then
+	echo "tp-launch: no connection with uuid $uuid" >&2
+	exit 1
+fi
+
+node="root/ConnectionType/$type/connections/$uuid"
+core="root/ConnectionType/$type/coreSettings"
+
+package="`tpreg get $core/package`"
+[ -z "$package" ] && package="$type"
+
+label="`tpreg get $node/label`"
+server="`tpreg get $node/address`"
+user="`tpreg get $node/username`"
+domain="`tpreg get $node/domain`"
+options="`tpreg get $node/options`"
+
+# ThinStation reads a bare '.' as "unset" in these positions.
+[ -z "$server" ]  && server="."
+[ -z "$options" ] && options="."
+[ -z "$user" ]    && user="."
+
+# FreeRDP wants the domain as part of the user, the same way ThinStation's
+# own session file passes it.
+if [ "$domain" != "" ] && [ "$user" != "." ]; then
+	user="$domain\\$user"
+fi
+
+if [ -z "$mode" ]; then
+	case "`make_caps \"\`tpreg get $node/windowType\`\"`" in
+	WINDOW)	mode="window" ;;
+	*)	mode="fullscreen" ;;
+	esac
+fi
+
+if ! which pkg >/dev/null 2>&1; then
+	echo "tp-launch: ThinStation's pkg dispatcher is not on PATH" >&2
+	exit 1
+fi
+
+if [ ! -e "/etc/init.d/$package" ]; then
+	# Same failure ThinPro reports as "package doesn't exist, check your
+	# build.conf" - the connection type is configured but its package was
+	# never built into the image.
+	echo "tp-launch: package '$package' is not in this image." >&2
+	echo "           Add 'package $package' to build.conf and rebuild." >&2
+	exit 1
+fi
+
+logger -t tp-launch "starting $label ($type/$uuid) as $mode"
+
+# workspace is position 4 and unused here; pass_enable, gate and gate_user
+# are left empty so the package's own defaults apply.
+exec pkg "$mode" "$package" "$server" "$options" "" "$user" "" "" ""

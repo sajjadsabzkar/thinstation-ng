@@ -30,7 +30,7 @@ root/ConnectionType/freerdp/coreSettings/icon=freerdp
 root/ConnectionType/freerdp/coreSettings/serverRequired=required
 root/ConnectionType/freerdp/coreSettings/priority=10
 root/ConnectionType/freerdp/coreSettings/loginfields=server username password domain
-root/ConnectionType/freerdp/coreSettings/fields=label address username domain windowType autostart autoReconnect waitForNetwork
+root/ConnectionType/freerdp/coreSettings/fields=label address username domain windowType autostart autoReconnect waitForNetwork options
 
 # --- Citrix -----------------------------------------------------------------
 root/ConnectionType/ica/coreSettings/label=Citrix Workspace
@@ -40,7 +40,7 @@ root/ConnectionType/ica/coreSettings/icon=ica
 root/ConnectionType/ica/coreSettings/serverRequired=required
 root/ConnectionType/ica/coreSettings/priority=20
 root/ConnectionType/ica/coreSettings/loginfields=server username password domain
-root/ConnectionType/ica/coreSettings/fields=label address username domain autostart autoReconnect waitForNetwork
+root/ConnectionType/ica/coreSettings/fields=label address username domain autostart autoReconnect waitForNetwork options
 
 # --- VMware Horizon ---------------------------------------------------------
 root/ConnectionType/horizon/coreSettings/label=VMware Horizon View
@@ -50,7 +50,7 @@ root/ConnectionType/horizon/coreSettings/icon=horizon
 root/ConnectionType/horizon/coreSettings/serverRequired=optional
 root/ConnectionType/horizon/coreSettings/priority=30
 root/ConnectionType/horizon/coreSettings/loginfields=server username password domain
-root/ConnectionType/horizon/coreSettings/fields=label address username domain autostart autoReconnect waitForNetwork
+root/ConnectionType/horizon/coreSettings/fields=label address username domain autostart autoReconnect waitForNetwork options
 
 # --- Web browser ------------------------------------------------------------
 root/ConnectionType/firefox/coreSettings/label=Web Browser
@@ -60,4 +60,39 @@ root/ConnectionType/firefox/coreSettings/icon=firefox
 root/ConnectionType/firefox/coreSettings/serverRequired=optional
 root/ConnectionType/firefox/coreSettings/priority=40
 root/ConnectionType/firefox/coreSettings/loginfields=
-root/ConnectionType/firefox/coreSettings/fields=label address kioskMode autostart autoReconnect waitForNetwork
+root/ConnectionType/firefox/coreSettings/fields=label address kioskMode autostart autoReconnect waitForNetwork options
+
+# --- Field specifications ---------------------------------------------------
+# The connection editor builds its form from these, so adding a field to a
+# type's 'fields' list is enough to make it editable - no code change.
+# type is one of: text, password, bool, choice
+# choices is '|' separated.
+root/FieldSpec/label/label=Name
+root/FieldSpec/label/type=text
+root/FieldSpec/address/label=Address
+root/FieldSpec/address/type=text
+root/FieldSpec/address/hint=Server host name or IP address
+root/FieldSpec/username/label=Username
+root/FieldSpec/username/type=text
+root/FieldSpec/password/label=Password
+root/FieldSpec/password/type=password
+root/FieldSpec/domain/label=Domain
+root/FieldSpec/domain/type=text
+root/FieldSpec/windowType/label=Window
+root/FieldSpec/windowType/type=choice
+root/FieldSpec/windowType/choices=full|window
+root/FieldSpec/windowType/default=full
+root/FieldSpec/kioskMode/label=Kiosk mode
+root/FieldSpec/kioskMode/type=bool
+root/FieldSpec/autostart/label=Start automatically at login
+root/FieldSpec/autostart/type=bool
+root/FieldSpec/autoReconnect/label=Reconnect automatically
+root/FieldSpec/autoReconnect/type=bool
+root/FieldSpec/waitForNetwork/label=Wait for the network
+root/FieldSpec/waitForNetwork/type=bool
+root/FieldSpec/waitForNetwork/default=1
+root/FieldSpec/options/label=Extra arguments
+root/FieldSpec/options/type=text
+root/FieldSpec/options/hint=Passed through to the client unchanged
+
+# Every type gets an 'options' escape hatch, same idea as ThinPro's ExtraArgs.

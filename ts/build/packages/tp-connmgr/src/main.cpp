@@ -6,7 +6,7 @@
 
 #include <QApplication>
 #include <QDir>
-#include <QTranslator>
+#include <QIcon>
 
 #include "mainwindow.h"
 #include "model.h"

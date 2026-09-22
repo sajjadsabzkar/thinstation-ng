@@ -40,7 +40,7 @@ FieldSpec FieldSpec::load(const Registry &reg, const QString &typeId,
     const QString choices = reg.value(own + QLatin1String("choices"),
                             reg.value(shared + QLatin1String("choices")));
     if (!choices.isEmpty())
-        s.choices = choices.split(QLatin1Char('|'), QString::SkipEmptyParts);
+        s.choices = choices.split(QLatin1Char('|'), Qt::SkipEmptyParts);
 
     return s;
 }
@@ -94,7 +94,7 @@ void Model::reload()
         t.priority       = m_reg->value(core + QLatin1String("priority"),
                                         QLatin1String("50")).toInt();
         t.fields         = m_reg->value(core + QLatin1String("fields"))
-                               .split(QLatin1Char(' '), QString::SkipEmptyParts);
+                               .split(QLatin1Char(' '), Qt::SkipEmptyParts);
         m_types.append(t);
 
         const QStringList uuids = m_reg->children(

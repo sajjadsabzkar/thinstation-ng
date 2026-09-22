@@ -11,7 +11,7 @@ QMAKE_LFLAGS_RELEASE   += -Wl,--as-needed -Wl,-O1
 
 # The registry lives in the tp-registry package, which owns both this C++
 # implementation and the tpreg shell tool that reads the same two files.
-REGISTRY = $$PWD/../../tp-registry/src
+REGISTRY = $$PWD/../../../tp-registry/build/src
 INCLUDEPATH += $$REGISTRY
 
 SOURCES += main.cpp $$REGISTRY/registry.cpp model.cpp mainwindow.cpp editdialog.cpp

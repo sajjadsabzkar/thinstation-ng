@@ -8,7 +8,7 @@ TEMPLATE = app
 QMAKE_CXXFLAGS_RELEASE += -Os
 QMAKE_LFLAGS_RELEASE   += -Wl,--as-needed -Wl,-O1
 
-REGISTRY = $$PWD/../../tp-registry/src
+REGISTRY = $$PWD/../../../tp-registry/build/src
 INCLUDEPATH += $$REGISTRY
 
 SOURCES += main.cpp $$REGISTRY/registry.cpp panelform.cpp

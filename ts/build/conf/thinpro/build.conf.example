@@ -122,10 +122,10 @@ module fuse3                 # Updated FUSE version
 # Select sound-related packages.
 
 package alsa                 # Advanced Linux Sound Architecture
-package pipewire             # Modern sound server
+#package pipewire             # dropped: pipewire + wireplumber on top of alsa is a second sound stack; alsa alone drives the mixer panel
 #package pavucontrol          # PulseAudio mixer application
 #package pasystray            # Systray volume icon
-package xfce4-pulseaudio-plugin # Systray volume icon
+#package xfce4-pulseaudio-plugin # dropped: systray volume applet, superseded by the Sound panel
 
 #####################
 ### --- Video --- ###
@@ -196,7 +196,7 @@ package autonet              # Legacy automatic network configuration
 ############################
 # End-user applications and software.
 
-package chrome               # Google Chrome browser
+#package chrome               # dropped: chrome is ~300 MB and firefox already covers the Web connection type
 #package firefox              # Mozilla Firefox browser
 #package filezilla            # FileZilla FTP client
 #package meld                 # Visual diff and merge tool
@@ -311,7 +311,7 @@ package lightdm              # Lightweight display manager
 
 # Utilities
 package terminal             # Terminal emulator for XFCE
-package thunar               # File manager for XFCE
+#package thunar               # dropped: a file manager has no place on a kiosk client
 
 ########################################
 ### --- Fonts, Icons, and Themes --- ###
@@ -319,14 +319,14 @@ package thunar               # File manager for XFCE
 # Packages for font rendering, icon sets, and GTK themes.
 
 package fonts-TTF-liberation # Liberation TrueType fonts
-package fonts-TTF-noto       # Google Noto fonts for wide Unicode support
+#package fonts-TTF-noto       # dropped: Noto is ~300 MB of wide-Unicode coverage; Liberation covers the UI
 
 package icons-cursor         # Cursor theme
-package icons-gnome          # GNOME icon set
+#package icons-gnome          # dropped: the control panel draws its own icons; hicolor is enough
 package icons-hicolor        # Hicolor icon theme
-package icons-adwaita        # Adwaita icon theme
+#package icons-adwaita        # dropped: same
 
-package gtk-theme-adwaita    # Adwaita GTK theme
+#package gtk-theme-adwaita    # dropped: nothing GTK is left in the image
 
 ######################################
 ### --- Build Control Settings --- ###
@@ -403,12 +403,13 @@ param downloads         /downloads         # Leave this alone unless you can t d
 # The connection registry, the Qt connection manager and a trimmed Qt5.
 package tp-registry          # connection registry + the tpreg CLI
 package tp-connmgr           # the connection chooser (needs tp-registry)
+package tp-controlpanel      # the settings shell and its registry-driven panels
 package qt5-min              # QtCore/Gui/Widgets only, no QML
 
 # Connection types offered by the connection manager. Each one maps to a
 # ConnectionType in the registry; drop a package and its type disappears
 # from the chooser.
 package freerdp              # RDP            -> "FreeRDP 2"
-package ica                  # Citrix         -> "Citrix Workspace"
-package horizon              # VMware Horizon -> "VMware Horizon View"
+#package ica                  # dropped: non-distributable: needs the Citrix client fetched with --autodl before this can build
+#package horizon              # dropped: non-distributable: needs the VMware Horizon client fetched with --autodl
 package firefox              # Web            -> "Web Browser"

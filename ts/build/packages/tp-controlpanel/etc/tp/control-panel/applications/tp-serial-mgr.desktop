@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Serial Manager
+Comment=Serial ports and what they are wired to
+Icon=serial
+Exec=sudo tp-panel serial
+Terminal=false
+Categories=config-panel
+X-TP-Category=Hardware
+Keywords=serial;com;rs232;tty;baud;

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Administrator/User Mode Switch
+Comment=Unlock the settings, or lock them again
+Icon=admin
+Exec=tp-panel switchadmin
+Terminal=false
+Categories=config-panel
+X-TP-Category=Security
+Keywords=admin;administrator;user;mode;unlock;

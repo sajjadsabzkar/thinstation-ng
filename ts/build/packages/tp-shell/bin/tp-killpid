@@ -1,0 +1,47 @@
+#!/bin/sh
+# Ends a process for the Task Manager panel.
+#
+# Refuses anything that would take the client down with it: killing PID 1 or
+# the running session from a settings panel is never what someone meant.
+
+PID="$1"
+
+case "$PID" in
+''|*[!0-9]*)
+	echo "not a process id: '$PID'" >&2
+	exit 2
+	;;
+esac
+
+if [ "$PID" -le 1 ]; then
+	echo "refusing to end PID $PID" >&2
+	exit 1
+fi
+
+if [ ! -d "/proc/$PID" ]; then
+	echo "no process $PID" >&2
+	exit 1
+fi
+
+name=`cat /proc/$PID/comm 2>/dev/null`
+
+case "$name" in
+systemd|init|tp-session|Xorg|X)
+	echo "refusing to end $name ($PID): the session depends on it" >&2
+	exit 1
+	;;
+esac
+
+kill "$PID" 2>/dev/null
+sleep 2
+if [ -d "/proc/$PID" ]; then
+	kill -9 "$PID" 2>/dev/null
+	sleep 1
+fi
+
+if [ -d "/proc/$PID" ]; then
+	echo "$name ($PID) did not end" >&2
+	exit 1
+fi
+echo "ended $name ($PID)"
+exit 0

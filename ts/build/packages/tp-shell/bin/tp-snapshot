@@ -1,0 +1,85 @@
+#!/bin/sh
+# Saves and restores the writable configuration of this client.
+#
+# ThinPro's Snapshots panel takes btrfs snapshots, which it can do because
+# its rootfs is btrfs and writable. Ours is a read-only squashfs, so nothing
+# in the image can drift -- the only thing that differs between two boots is
+# the configuration under /var/lib/tp and /etc/tp, and that is what this
+# keeps.
+
+. /etc/thinstation.global 2>/dev/null
+
+DIR=`tpreg get root/snapshots/directory 2>/dev/null`
+[ -n "$DIR" ] || DIR=/var/lib/tp/snapshots
+KEEP=`tpreg get root/snapshots/keep 2>/dev/null`
+[ -n "$KEEP" ] || KEEP=10
+
+# What is worth keeping: the user layer of the registry and anything a panel
+# wrote beside it. The defaults live in the image and come back on their own.
+SOURCES="/var/lib/tp/registry.conf /var/lib/tp/connections"
+
+usage() {
+	echo "usage: tp-snapshot create|restore|list|prune [name]" >&2
+	exit 2
+}
+
+case "$1" in
+create)
+	mkdir -p "$DIR" || { echo "cannot write $DIR" >&2; exit 1; }
+	name="$2"
+	[ -n "$name" ] || name=`date '+%Y-%m-%d-%H%M%S'`
+	set --
+	for f in $SOURCES; do
+		[ -e "$f" ] && set -- "$@" "$f"
+	done
+	if [ $# -eq 0 ]; then
+		echo "nothing to snapshot yet" >&2
+		exit 1
+	fi
+	tar czf "$DIR/$name.tar.gz" "$@" 2>/dev/null || {
+		echo "could not write the snapshot" >&2; exit 1; }
+	echo "saved $name"
+
+	# Keep the directory from growing without limit on a client nobody
+	# ever looks at.
+	count=`ls -1 "$DIR"/*.tar.gz 2>/dev/null | wc -l`
+	while [ "$count" -gt "$KEEP" ]; do
+		oldest=`ls -1t "$DIR"/*.tar.gz 2>/dev/null | tail -1`
+		[ -n "$oldest" ] || break
+		rm -f "$oldest"
+		count=`expr $count - 1`
+	done
+	;;
+restore)
+	name="$2"
+	if [ -n "$name" ]; then
+		file="$DIR/$name.tar.gz"
+	else
+		file=`ls -1t "$DIR"/*.tar.gz 2>/dev/null | head -1`
+	fi
+	[ -n "$file" ] && [ -r "$file" ] || { echo "no snapshot to restore" >&2; exit 1; }
+
+	# Take one of the current state first: restoring the wrong snapshot
+	# should not be the end of the story.
+	"$0" create "before-restore-`date '+%Y%m%d-%H%M%S'`" >/dev/null 2>&1
+
+	tar xzf "$file" -C / 2>/dev/null || { echo "could not unpack $file" >&2; exit 1; }
+	echo "restored `basename "$file" .tar.gz`"
+	echo "Log out and back in for every setting to take effect."
+	;;
+list)
+	ls -1t "$DIR"/*.tar.gz 2>/dev/null | while read -r f; do
+		printf '%s\t%s\n' "`basename "$f" .tar.gz`" "`ls -lh "$f" | awk '{print $5}'`"
+	done
+	;;
+prune)
+	oldest=`ls -1t "$DIR"/*.tar.gz 2>/dev/null | tail -1`
+	[ -n "$oldest" ] || { echo "no snapshots" >&2; exit 1; }
+	rm -f "$oldest" && echo "deleted `basename "$oldest" .tar.gz`"
+	;;
+*)
+	usage
+	;;
+esac
+
+exit 0

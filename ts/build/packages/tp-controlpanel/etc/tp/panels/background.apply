@@ -1,0 +1,42 @@
+#!/bin/sh
+# Paints the root window from root/background/*.
+#
+# xsetroot can only do a colour; images need feh. Rather than pretend, the
+# panel says which of the two this image has and this falls back to the
+# colour when the image cannot be drawn.
+
+. /etc/tp/panels/common 2>/dev/null
+
+MODE=`tpreg get root/background/mode`
+COLOUR=`tpreg get root/background/colour`
+IMAGE=`tpreg get root/background/image`
+FIT=`tpreg get root/background/imageMode`
+
+[ -n "$COLOUR" ] || COLOUR='#1F2933'
+[ -n "$DISPLAY" ] || export DISPLAY=:0
+
+paint_colour() {
+	if command -v xsetroot >/dev/null 2>&1; then
+		xsetroot -solid "$COLOUR" 2>/dev/null
+	elif command -v feh >/dev/null 2>&1; then
+		feh --bg-solid "$COLOUR" 2>/dev/null
+	fi
+}
+
+if [ "$MODE" = "image" ] && [ -n "$IMAGE" ] && [ -r "$IMAGE" ]; then
+	if command -v feh >/dev/null 2>&1; then
+		case "$FIT" in
+		centre|center)	opt="--bg-center" ;;
+		tile)		opt="--bg-tile" ;;
+		*)		opt="--bg-scale" ;;
+		esac
+		feh $opt "$IMAGE" 2>/dev/null && exit 0
+	fi
+	# No feh, or feh failed: a plain colour beats a black screen.
+	paint_colour
+	echo "no image tool in this image; used the colour instead" >&2
+	exit 0
+fi
+
+paint_colour
+exit 0

@@ -1,0 +1,118 @@
+#!/bin/bash
+# Ships this client's logs to a collector, so a thin client that misbehaves
+# in the field can be looked at without standing in front of it.
+#
+# ThinPro has no equivalent: its logging plugin only carries a debug level,
+# and its System Information window shows logs locally. On a fleet of
+# disk-less clients that is not enough -- when the image is read-only and
+# /var is a tmpfs, everything a failed boot had to say is gone the moment it
+# reboots.
+#
+# What gets shipped:
+#
+#   * the journal, which is where systemd units and anything using logger()
+#     end up
+#   * the ThinStation runtime logs under /var/log
+#   * the per-package session logs under /run/user/<uid>/applications, which
+#     is where init.d/common sends each connection's output
+#
+# Everything is sent as RFC 3164 syslog over UDP, written straight to
+# /dev/udp from bash. No rsyslog, no netcat, nothing to install: the one
+# dependency is bash, which is already PID 1's shell here.
+
+. /etc/thinstation.global 2>/dev/null
+
+reg() { tpreg get "$1" 2>/dev/null; }
+
+ENABLED=`reg root/logging/remote/enabled`
+SERVER=`reg root/logging/remote/server`
+PORT=`reg root/logging/remote/port`
+FACILITY=`reg root/logging/remote/facility`
+LEVEL=`reg root/logging/general/debugLevel`
+
+[ -n "$PORT" ]     || PORT=514
+[ -n "$FACILITY" ] || FACILITY=16          # local0
+[ -n "$LEVEL" ]    || LEVEL=Notice
+
+case "`echo "$ENABLED" | tr 'A-Z' 'a-z'`" in
+1|on|true|yes) ;;
+*)	exit 0 ;;
+esac
+
+if [ -z "$SERVER" ]; then
+	logger -t tp-logship "remote logging is on but no server is set" 2>/dev/null
+	exit 0
+fi
+
+HOSTNAME=`hostname 2>/dev/null`
+[ -n "$HOSTNAME" ] || HOSTNAME=thinclient
+
+# Severity floor. A client that is working should be quiet; Debug and Trace
+# are for when someone is actually looking.
+case "$LEVEL" in
+Trace)		SEVERITY=7 ;;
+Debug)		SEVERITY=7 ;;
+Information)	SEVERITY=6 ;;
+*)		SEVERITY=5 ;;
+esac
+
+PRI=$(( FACILITY * 8 + SEVERITY ))
+
+# One socket for the whole run rather than one per line: on a slow client
+# the connect() per message is the expensive part.
+exec 3<>/dev/udp/$SERVER/$PORT 2>/dev/null
+if [ $? -ne 0 ]; then
+	logger -t tp-logship "cannot reach $SERVER:$PORT" 2>/dev/null
+	exit 1
+fi
+
+send() {
+	# RFC 3164: <PRI>Mmm dd hh:mm:ss hostname tag: message
+	local tag="$1"; shift
+	printf '<%d>%s %s %s: %s\n' \
+		"$PRI" "`date '+%b %e %H:%M:%S'`" "$HOSTNAME" "$tag" "$*" >&3 2>/dev/null
+}
+
+send tp-logship "log shipping started, level $LEVEL"
+
+# Anything already on disk from this boot, so a crash before the shipper
+# started is not lost.
+for f in /var/log/*.log /var/log/messages; do
+	[ -r "$f" ] || continue
+	tail -n 200 "$f" 2>/dev/null | while IFS= read -r line; do
+		send "`basename "$f"`" "$line"
+	done
+done
+
+# --- follow everything from here on ----------------------------------------
+# Each source runs as its own background reader writing into the same socket.
+# Lines can interleave, which is fine: every line carries its own tag.
+
+if command -v journalctl >/dev/null 2>&1; then
+	journalctl -f -n 0 -o short 2>/dev/null | while IFS= read -r line; do
+		send journal "$line"
+	done &
+fi
+
+tail -F /var/log/*.log /var/log/messages 2>/dev/null | while IFS= read -r line; do
+	send syslog "$line"
+done &
+
+# The session logs appear only once a connection starts, so watch for them
+# rather than opening them once at boot.
+(
+	seen=""
+	while true; do
+		for f in /run/user/*/applications/* /tmp/*.log; do
+			[ -r "$f" ] || continue
+			case " $seen " in *" $f "*) continue ;; esac
+			seen="$seen $f"
+			tail -F "$f" 2>/dev/null | while IFS= read -r line; do
+				send "`basename "$f"`" "$line"
+			done &
+		done
+		sleep 10
+	done
+) &
+
+wait

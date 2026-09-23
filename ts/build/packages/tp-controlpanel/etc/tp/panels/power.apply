@@ -1,0 +1,38 @@
+#!/bin/sh
+# Applies root/power/* to the running X session.
+#
+# Only the screen half is done here. Suspend is left to systemd because a
+# thin client that suspends with a session open comes back to a dead
+# connection, and logind already knows how to ask about that.
+
+. /etc/tp/panels/common 2>/dev/null
+
+BLANK=`tpreg get root/power/screenBlankMinutes`
+DPMS=`tpreg get root/power/dpmsEnabled`
+SUSPEND=`tpreg get root/power/suspendMinutes`
+
+command -v xset >/dev/null 2>&1 || exit 0
+[ -n "$DISPLAY" ] || export DISPLAY=:0
+
+if is_true "$DPMS" && [ -n "$BLANK" ] && [ "$BLANK" -gt 0 ] 2>/dev/null; then
+	secs=`expr "$BLANK" \* 60`
+	xset s "$secs" "$secs" 2>/dev/null
+	xset +dpms 2>/dev/null
+	# standby, suspend, off - all at the same point. Splitting them only
+	# makes the screen flicker through three states on the way down.
+	xset dpms "$secs" "$secs" "$secs" 2>/dev/null
+else
+	xset s off 2>/dev/null
+	xset -dpms 2>/dev/null
+fi
+
+# systemd's idle action, when this build has logind.
+if [ -n "$SUSPEND" ] && [ "$SUSPEND" -gt 0 ] 2>/dev/null; then
+	if [ -w /etc/systemd/logind.conf ]; then
+		sed -i 's/^#*IdleAction=.*/IdleAction=suspend/' /etc/systemd/logind.conf 2>/dev/null
+		sed -i "s/^#*IdleActionSec=.*/IdleActionSec=${SUSPEND}min/" /etc/systemd/logind.conf 2>/dev/null
+		systemctl kill -s HUP systemd-logind 2>/dev/null
+	fi
+fi
+
+exit 0

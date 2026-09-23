@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Task Manager
+Comment=Running processes, load and memory
+Icon=task
+Exec=tp-panel taskmgr
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+Keywords=task;process;kill;cpu;memory;

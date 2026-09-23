@@ -1,0 +1,52 @@
+#!/bin/sh
+# Applies root/firewall/* with nftables.
+#
+# Only incoming traffic is filtered. A thin client whose outgoing traffic is
+# blocked is a brick, and no setting here should be able to produce one.
+
+. /etc/tp/panels/common 2>/dev/null
+
+ENABLED=`tpreg get root/firewall/enabled`
+ALLOWSSH=`tpreg get root/firewall/allowSsh`
+ALLOWVNC=`tpreg get root/firewall/allowVnc`
+EXTRA=`tpreg get root/firewall/extraPorts`
+SSHPORT=`tpreg get root/sshd/port`
+VNCPORT=`tpreg get root/vncshadow/port`
+[ -n "$SSHPORT" ] || SSHPORT=22
+[ -n "$VNCPORT" ] || VNCPORT=5900
+
+command -v nft >/dev/null 2>&1 || {
+	echo "nftables is not in this image" >&2
+	exit 1
+}
+
+nft delete table inet tp 2>/dev/null
+
+is_true "$ENABLED" || exit 0
+
+nft add table inet tp 2>/dev/null || {
+	echo "could not create the firewall table" >&2
+	exit 1
+}
+nft add chain inet tp input '{ type filter hook input priority 0 ; policy drop ; }' 2>/dev/null
+
+# Anything this client started must be able to finish, and a machine that
+# cannot talk to itself breaks in ways that are very hard to read.
+nft add rule inet tp input ct state established,related accept 2>/dev/null
+nft add rule inet tp input iif lo accept 2>/dev/null
+nft add rule inet tp input ip protocol icmp accept 2>/dev/null
+
+is_true "$ALLOWSSH" && nft add rule inet tp input tcp dport "$SSHPORT" accept 2>/dev/null
+is_true "$ALLOWVNC" && nft add rule inet tp input tcp dport "$VNCPORT" accept 2>/dev/null
+
+for p in $EXTRA; do
+	port=`echo "$p" | cut -d/ -f1`
+	proto=`echo "$p" | cut -s -d/ -f2`
+	[ -n "$proto" ] || proto=tcp
+	case "$port" in
+	''|*[!0-9]*)	echo "ignoring '$p': not a port" >&2; continue ;;
+	esac
+	nft add rule inet tp input "$proto" dport "$port" accept 2>/dev/null
+done
+
+exit 0

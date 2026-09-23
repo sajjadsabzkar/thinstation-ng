@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Touchscreen
+Comment=Calibration and rotation
+Icon=touch
+Exec=sudo tp-panel touchscreen
+Terminal=false
+Categories=config-panel
+X-TP-Category=Input Devices
+Keywords=touch;touchscreen;calibrate;tap;

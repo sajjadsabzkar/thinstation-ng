@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Certificates
+Comment=Certificates this client trusts
+Icon=certificate
+Exec=sudo tp-panel certificates
+Terminal=false
+Categories=config-panel
+X-TP-Category=Security
+Keywords=certificate;ca;ssl;tls;trust;

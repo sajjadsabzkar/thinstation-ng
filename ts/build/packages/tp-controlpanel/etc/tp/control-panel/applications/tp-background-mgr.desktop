@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Background Manager
+Comment=The colour or picture behind the windows
+Icon=background
+Exec=tp-panel background
+Terminal=false
+Categories=config-panel
+X-TP-Category=Appearance
+Keywords=background;wallpaper;desktop;colour;

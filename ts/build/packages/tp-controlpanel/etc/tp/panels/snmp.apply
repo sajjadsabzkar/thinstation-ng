@@ -1,0 +1,42 @@
+#!/bin/sh
+# Applies root/snmp/* to snmpd.
+
+. /etc/tp/panels/common 2>/dev/null
+
+ENABLED=`tpreg get root/snmp/enabled`
+COMMUNITY=`tpreg get root/snmp/community`
+LOCATION=`tpreg get root/snmp/location`
+CONTACT=`tpreg get root/snmp/contact`
+TRAPSINK=`tpreg get root/snmp/trapSink`
+
+if ! command -v snmpd >/dev/null 2>&1; then
+	echo "snmpd is not in this image" >&2
+	exit 1
+fi
+
+if ! is_true "$ENABLED"; then
+	systemctl stop snmpd 2>/dev/null
+	systemctl disable snmpd 2>/dev/null
+	exit 0
+fi
+
+CONF=/etc/snmp/snmpd.conf
+mkdir -p /etc/snmp 2>/dev/null
+
+{
+	echo "# Written by the SNMP panel. Changes here are overwritten."
+	echo "rocommunity ${COMMUNITY:-public}"
+	[ -n "$LOCATION" ] && echo "sysLocation $LOCATION"
+	[ -n "$CONTACT" ]  && echo "sysContact $CONTACT"
+	[ -n "$TRAPSINK" ] && echo "trapsink $TRAPSINK ${COMMUNITY:-public}"
+} > "$CONF" 2>/dev/null || {
+	echo "cannot write $CONF" >&2
+	exit 1
+}
+
+systemctl enable snmpd 2>/dev/null
+systemctl restart snmpd 2>/dev/null || {
+	echo "snmpd did not restart" >&2
+	exit 1
+}
+exit 0

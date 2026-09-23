@@ -1,0 +1,21 @@
+#!/bin/sh
+# Opens a terminal on the client.
+#
+# ThinPro ships hptc-simple-xterm for this. Which emulator is actually in the
+# image depends on what build.conf selected, so try them in order of how
+# little they weigh rather than assuming one.
+
+for t in xterm uxterm xfce4-terminal lxterminal konsole gnome-terminal; do
+	if command -v "$t" >/dev/null 2>&1; then
+		exec "$t" -title "ThinPro Terminal" 2>/dev/null || exec "$t"
+	fi
+done
+
+# Nothing graphical to run it in. Say so where it will be seen rather than
+# exiting silently: from the control panel a silent exit looks like a crash.
+if command -v Xdialog >/dev/null 2>&1; then
+	Xdialog --msgbox "No terminal emulator is installed in this image." 8 50
+else
+	echo "No terminal emulator is installed in this image." >&2
+fi
+exit 1

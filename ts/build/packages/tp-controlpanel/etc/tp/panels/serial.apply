@@ -1,0 +1,21 @@
+#!/bin/sh
+# Applies root/serial/* to the port.
+#
+# The redirect flag is read by the connection wrappers when they build their
+# argument list, so there is nothing to do here for it -- only the line
+# settings, which stty owns.
+
+. /etc/tp/panels/common 2>/dev/null
+
+DEVICE=`tpreg get root/serial/device`
+BAUD=`tpreg get root/serial/baud`
+
+[ -n "$DEVICE" ] || exit 0
+[ -c "$DEVICE" ] || { echo "$DEVICE is not a serial port" >&2; exit 1; }
+[ -n "$BAUD" ] || BAUD=9600
+
+stty -F "$DEVICE" "$BAUD" 2>/dev/null || {
+	echo "could not set $DEVICE to $BAUD baud" >&2
+	exit 1
+}
+exit 0

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Keyboard Shortcuts
+Comment=Keys that open things
+Icon=shortcuts
+Exec=tp-panel shortcuts
+Terminal=false
+Categories=config-panel
+X-TP-Category=Input Devices
+Keywords=shortcut;hotkey;keybinding;

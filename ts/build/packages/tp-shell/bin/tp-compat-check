@@ -1,0 +1,90 @@
+#!/bin/sh
+# The same hardware checks the first-boot wizard runs, on demand.
+#
+# Prints one line per check so the panel can show the lot in its output box.
+# Nothing here fails the script: a client that is missing sound is still a
+# working client, and the point is to say what is missing, not to refuse.
+
+pass() { echo "OK    $1: $2"; }
+warn() { echo "WARN  $1: $2"; }
+fail() { echo "FAIL  $1: $2"; }
+
+# --- memory -----------------------------------------------------------------
+mem=`awk '/^MemTotal:/{print int($2/1024)}' /proc/meminfo 2>/dev/null`
+if [ -z "$mem" ]; then
+	warn "Memory" "cannot read /proc/meminfo"
+elif [ "$mem" -lt 512 ]; then
+	fail "Memory" "${mem} MB - too little to run a session"
+elif [ "$mem" -lt 1024 ]; then
+	warn "Memory" "${mem} MB - enough to boot, tight for a browser"
+else
+	pass "Memory" "${mem} MB"
+fi
+
+# --- cpu --------------------------------------------------------------------
+cpu=`awk -F: '/^model name/{print $2; exit}' /proc/cpuinfo 2>/dev/null | sed 's/^ *//'`
+cores=`grep -c '^processor' /proc/cpuinfo 2>/dev/null`
+if [ -n "$cpu" ]; then
+	pass "CPU" "$cpu (${cores:-1} cores)"
+else
+	warn "CPU" "cannot read /proc/cpuinfo"
+fi
+
+# --- graphics ---------------------------------------------------------------
+if [ -n "$DISPLAY" ] && command -v xrandr >/dev/null 2>&1; then
+	res=`xrandr 2>/dev/null | awk '/\*/{print $1; exit}'`
+	drv=`grep -m1 -oE '\(II\) [A-Za-z]+\(0\)' /var/log/Xorg.0.log 2>/dev/null | awk '{print $2}'`
+	if [ -n "$res" ]; then
+		pass "Graphics" "${res}${drv:+ via $drv}"
+	else
+		warn "Graphics" "X is running but reports no mode"
+	fi
+elif [ -d /sys/class/drm ] && [ -n "`ls /sys/class/drm 2>/dev/null`" ]; then
+	warn "Graphics" "a card is present but X is not running"
+else
+	fail "Graphics" "no display device found"
+fi
+
+# --- network ----------------------------------------------------------------
+found=0
+for i in /sys/class/net/*; do
+	n=`basename "$i"`
+	[ "$n" = "lo" ] && continue
+	found=1
+	carrier=`cat "$i/carrier" 2>/dev/null`
+	addr=`ip -4 -o addr show dev "$n" scope global 2>/dev/null | awk '{print $4}' | head -1`
+	if [ -n "$addr" ]; then
+		pass "Network $n" "$addr"
+	elif [ "$carrier" = "1" ]; then
+		warn "Network $n" "link is up but there is no address"
+	else
+		warn "Network $n" "no link"
+	fi
+done
+[ "$found" = "1" ] || fail "Network" "no interface found"
+
+# --- sound ------------------------------------------------------------------
+if [ -d /proc/asound ] && [ -n "`ls /proc/asound 2>/dev/null | grep -v '^version$'`" ]; then
+	card=`awk -F'[][]' '/\[/{print $2; exit}' /proc/asound/cards 2>/dev/null | sed 's/ *$//'`
+	pass "Sound" "${card:-a card is present}"
+else
+	warn "Sound" "no sound card - audio will not reach the session"
+fi
+
+# --- storage ----------------------------------------------------------------
+disks=`lsblk -dno NAME,SIZE,TYPE 2>/dev/null | awk '$3=="disk"{printf "%s %s ", $1, $2}'`
+if [ -n "$disks" ]; then
+	pass "Storage" "$disks"
+else
+	warn "Storage" "no local disk - this client runs from the image only"
+fi
+
+# --- usb --------------------------------------------------------------------
+if [ -d /sys/bus/usb/devices ]; then
+	n=`ls /sys/bus/usb/devices 2>/dev/null | grep -c ':'`
+	pass "USB" "${n} devices on the bus"
+else
+	warn "USB" "no USB bus found"
+fi
+
+exit 0

@@ -51,7 +51,10 @@ PanelForm::PanelForm(Registry *reg, const QString &panelId, QWidget *parent)
             const PanelField &f = m_fields.at(i);
             QWidget *w = buildWidget(f, currentValue(f));
             m_widgets.insert(f.name, w);
-            if (f.type == QLatin1String("bool"))
+            // A checkbox and a button already say what they are; a label in
+            // the left column beside them would only repeat the text.
+            if (f.type == QLatin1String("bool")
+                || f.type == QLatin1String("action"))
                 form->addRow(QString(), w);
             else
                 form->addRow(f.label + QLatin1Char(':'), w);
@@ -69,7 +72,8 @@ PanelForm::PanelForm(Registry *reg, const QString &panelId, QWidget *parent)
                     continue;
                 QWidget *w = buildWidget(f, currentValue(f));
                 m_widgets.insert(f.name, w);
-                if (f.type == QLatin1String("bool"))
+                if (f.type == QLatin1String("bool")
+                    || f.type == QLatin1String("action"))
                     form->addRow(QString(), w);
                 else
                     form->addRow(f.label + QLatin1Char(':'), w);
@@ -134,6 +138,11 @@ void PanelForm::loadSpec()
         f.section      = m_reg->value(base + QLatin1String("section"));
         f.defaultValue = m_reg->value(base + QLatin1String("default"));
         f.valueCommand = m_reg->value(base + QLatin1String("valueCommand"));
+        f.command      = m_reg->value(base + QLatin1String("command"));
+        f.confirm      = m_reg->value(base + QLatin1String("confirm"));
+        f.buttonText   = m_reg->value(base + QLatin1String("buttonText"), f.label);
+        f.timeout      = m_reg->value(base + QLatin1String("timeout"),
+                                      QLatin1String("300")).toInt();
         f.min          = m_reg->value(base + QLatin1String("min"),
                                       QLatin1String("0")).toInt();
         f.max          = m_reg->value(base + QLatin1String("max"),
@@ -160,6 +169,9 @@ void PanelForm::loadSpec()
 
 QString PanelForm::currentValue(const PanelField &f) const
 {
+    if (f.type == QLatin1String("action"))
+        return QString();
+
     if (f.type == QLatin1String("info") && !f.valueCommand.isEmpty())
         return runCommand(f.valueCommand).join(QLatin1String(" "));
 
@@ -226,6 +238,18 @@ QWidget *PanelForm::buildWidget(const PanelField &f, const QString &value)
         return box;
     }
 
+    if (f.type == QLatin1String("action")) {
+        QPushButton *b = new QPushButton(f.buttonText.isEmpty() ? f.label
+                                                                : f.buttonText, this);
+        // The slot finds the field again by name, so one slot serves every
+        // button on the panel.
+        b->setProperty("tpField", f.name);
+        if (!f.hint.isEmpty())
+            b->setToolTip(f.hint);
+        connect(b, SIGNAL(clicked()), this, SLOT(onAction()));
+        return b;
+    }
+
     if (f.type == QLatin1String("info")) {
         QLabel *l = new QLabel(value, this);
         l->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -258,7 +282,7 @@ QString PanelForm::readWidget(const PanelField &f, QWidget *w) const
         QSlider *sl = w->findChild<QSlider *>();
         return sl ? QString::number(sl->value()) : QString();
     }
-    if (f.type == QLatin1String("info"))
+    if (f.type == QLatin1String("info") || f.type == QLatin1String("action"))
         return QString();           // read-only, never written back
 
     QLineEdit *le = qobject_cast<QLineEdit *>(w);
@@ -292,7 +316,7 @@ bool PanelForm::commit()
 {
     for (int i = 0; i < m_fields.size(); ++i) {
         const PanelField &f = m_fields.at(i);
-        if (f.type == QLatin1String("info"))
+        if (f.type == QLatin1String("info") || f.type == QLatin1String("action"))
             continue;
         QWidget *w = m_widgets.value(f.name);
         if (!w)
@@ -317,6 +341,86 @@ bool PanelForm::commit()
         // Saved is saved; report it and keep the dialog usable.
     }
     return true;
+}
+
+void PanelForm::onAction()
+{
+    const QString name = sender() ? sender()->property("tpField").toString()
+                                  : QString();
+    for (int i = 0; i < m_fields.size(); ++i)
+        if (m_fields.at(i).name == name) {
+            runAction(m_fields.at(i));
+            return;
+        }
+}
+
+void PanelForm::runAction(const PanelField &f)
+{
+    if (f.command.isEmpty())
+        return;
+
+    // Factory reset and friends are one click away from destroying the
+    // client's configuration, so a panel can demand a yes first.
+    if (!f.confirm.isEmpty()
+        && QMessageBox::question(this, windowTitle(), f.confirm,
+                                 QMessageBox::Yes | QMessageBox::No,
+                                 QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    QPushButton *button = qobject_cast<QPushButton *>(m_widgets.value(f.name));
+    if (button)
+        button->setEnabled(false);
+    setCursor(Qt::WaitCursor);
+
+    QProcess p;
+    p.setProcessChannelMode(QProcess::MergedChannels);
+    p.start(QLatin1String("/bin/sh"),
+            QStringList() << QLatin1String("-c") << f.command);
+
+    bool started = p.waitForStarted(5000);
+    bool finished = false;
+    if (started)
+        finished = p.waitForFinished(f.timeout > 0 ? f.timeout * 1000 : -1);
+
+    if (started && !finished) {
+        p.kill();
+        p.waitForFinished(1000);
+    }
+
+    unsetCursor();
+    if (button)
+        button->setEnabled(true);
+
+    const QString output =
+        QString::fromLocal8Bit(p.readAllStandardOutput()).trimmed();
+
+    if (!started) {
+        QMessageBox::critical(this, f.label, tr("Could not run the command."));
+        return;
+    }
+    if (!finished) {
+        QMessageBox::warning(this, f.label,
+                             tr("The command did not finish within %1 seconds "
+                                "and was stopped.").arg(f.timeout));
+        return;
+    }
+
+    const bool ok = (p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0);
+
+    // Show the output whatever the exit code: for something like the task
+    // manager the output *is* the point, and for a failure it is the only
+    // clue the user gets.
+    QMessageBox box(ok ? QMessageBox::Information : QMessageBox::Warning,
+                    f.label,
+                    ok ? tr("Done.") : tr("Finished with errors."),
+                    QMessageBox::Ok, this);
+    if (!output.isEmpty()) {
+        if (output.length() < 400 && !output.contains(QLatin1Char('\n')))
+            box.setInformativeText(output);
+        else
+            box.setDetailedText(output);
+    }
+    box.exec();
 }
 
 void PanelForm::onApply()

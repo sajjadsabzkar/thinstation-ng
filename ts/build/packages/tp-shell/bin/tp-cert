@@ -1,0 +1,67 @@
+#!/bin/sh
+# Adds a certificate to the system trust store.
+#
+# The store in /etc/pki is inside the read-only image, so a certificate added
+# here is copied into the writable layer and linked in. That also means a
+# factory reset removes it, which is the right behaviour: a certificate is a
+# setting, not part of the image.
+
+CERTDIR=/var/lib/tp/certs
+ANCHORS=/etc/pki/ca-trust/source/anchors
+
+case "$1" in
+import)
+	src="$2"
+	[ -n "$src" ] || { echo "no file chosen" >&2; exit 2; }
+	[ -r "$src" ] || { echo "cannot read $src" >&2; exit 1; }
+
+	# Refuse anything that is not actually a certificate, rather than
+	# copying a stray file into the trust store and finding out later.
+	if command -v openssl >/dev/null 2>&1; then
+		if ! openssl x509 -in "$src" -noout 2>/dev/null; then
+			if ! openssl x509 -in "$src" -inform DER -noout 2>/dev/null; then
+				echo "$src is not a certificate openssl can read" >&2
+				exit 1
+			fi
+		fi
+	fi
+
+	mkdir -p "$CERTDIR" 2>/dev/null || { echo "cannot create $CERTDIR" >&2; exit 1; }
+	name=`basename "$src"`
+	cp -f "$src" "$CERTDIR/$name" 2>/dev/null || {
+		echo "could not copy the certificate" >&2; exit 1; }
+	chmod 0644 "$CERTDIR/$name" 2>/dev/null
+
+	if [ -d "$ANCHORS" ] && [ -w "$ANCHORS" ]; then
+		ln -sf "$CERTDIR/$name" "$ANCHORS/$name" 2>/dev/null
+		if command -v update-ca-trust >/dev/null 2>&1; then
+			update-ca-trust extract 2>/dev/null || update-ca-trust 2>/dev/null
+		fi
+		echo "trusted: $name"
+	else
+		# Kept, but not yet trusted system-wide. Say which it is.
+		echo "stored: $name"
+		echo "The system trust store is read-only in this image, so only" >&2
+		echo "applications that read $CERTDIR will see it." >&2
+	fi
+
+	if command -v openssl >/dev/null 2>&1; then
+		openssl x509 -in "$CERTDIR/$name" -noout -subject -dates 2>/dev/null
+	fi
+	;;
+list)
+	ls -1 "$CERTDIR" 2>/dev/null
+	;;
+remove)
+	name="$2"
+	[ -n "$name" ] || { echo "usage: tp-cert remove <name>" >&2; exit 2; }
+	rm -f "$CERTDIR/$name" "$ANCHORS/$name" 2>/dev/null
+	command -v update-ca-trust >/dev/null 2>&1 && update-ca-trust extract 2>/dev/null
+	echo "removed $name"
+	;;
+*)
+	echo "usage: tp-cert import <file> | list | remove <name>" >&2
+	exit 2
+	;;
+esac
+exit 0

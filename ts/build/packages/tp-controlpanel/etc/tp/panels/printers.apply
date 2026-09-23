@@ -1,0 +1,34 @@
+#!/bin/sh
+# Applies root/printers/* to CUPS.
+
+. /etc/tp/panels/common 2>/dev/null
+
+SHARE=`tpreg get root/printers/shareLocal`
+BROWSE=`tpreg get root/printers/cupsBrowsing`
+SERVER=`tpreg get root/printers/remoteServer`
+
+command -v cupsd >/dev/null 2>&1 || { echo "cups is not in this image" >&2; exit 1; }
+
+# Pointing at someone else's server is a client-side setting and needs no
+# local daemon at all, so do that first and independently.
+if [ -n "$SERVER" ]; then
+	mkdir -p /etc/cups 2>/dev/null
+	echo "ServerName $SERVER" > /etc/cups/client.conf 2>/dev/null
+else
+	rm -f /etc/cups/client.conf 2>/dev/null
+fi
+
+if command -v cupsctl >/dev/null 2>&1; then
+	if is_true "$SHARE"; then
+		cupsctl --share-printers --remote-any 2>/dev/null
+	else
+		cupsctl --no-share-printers --no-remote-any 2>/dev/null
+	fi
+	if is_true "$BROWSE"; then
+		cupsctl BrowseWebIF=Yes 2>/dev/null
+	fi
+fi
+
+systemctl enable cups 2>/dev/null
+systemctl restart cups 2>/dev/null
+exit 0

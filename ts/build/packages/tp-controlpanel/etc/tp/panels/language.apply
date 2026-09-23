@@ -1,0 +1,31 @@
+#!/bin/sh
+# Applies root/i18n/locale and the keyboard layout that goes with it.
+#
+# The locale cannot change under a running session -- every process already
+# read LANG when it started -- so this writes it where the next login will
+# pick it up and says so rather than pretending it took effect.
+
+. /etc/tp/panels/common 2>/dev/null
+
+LOCALE=`tpreg get root/i18n/locale`
+LAYOUT=`tpreg get root/keyboard/layout`
+
+if [ -n "$LOCALE" ]; then
+	if [ -w /etc ] || [ -w /etc/locale.conf ]; then
+		echo "LANG=$LOCALE" > /etc/locale.conf 2>/dev/null
+	fi
+	# ThinStation reads its own runtime layer at boot, so put it there too.
+	if [ -n "$TS_RUNTIME" ] && [ -w "`dirname "$TS_RUNTIME"`" ]; then
+		grep -v '^LOCALE=' "$TS_RUNTIME" > "$TS_RUNTIME.$$" 2>/dev/null
+		echo "LOCALE=$LOCALE" >> "$TS_RUNTIME.$$"
+		mv -f "$TS_RUNTIME.$$" "$TS_RUNTIME" 2>/dev/null
+	fi
+fi
+
+# The keyboard half does take effect now.
+if [ -n "$LAYOUT" ] && command -v setxkbmap >/dev/null 2>&1; then
+	[ -n "$DISPLAY" ] || export DISPLAY=:0
+	setxkbmap "$LAYOUT" 2>/dev/null
+fi
+
+exit 0

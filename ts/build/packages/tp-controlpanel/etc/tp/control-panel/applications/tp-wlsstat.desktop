@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Wireless Statistics
+Comment=Signal strength and what it joined
+Icon=wireless
+Exec=tp-panel wlsstat
+Terminal=false
+Categories=config-panel
+X-TP-Category=Hardware
+Keywords=wireless;wifi;signal;rssi;

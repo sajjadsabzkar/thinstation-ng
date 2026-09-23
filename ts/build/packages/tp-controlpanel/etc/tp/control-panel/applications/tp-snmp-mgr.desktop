@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SNMP
+Comment=Answer monitoring queries
+Icon=snmp
+Exec=sudo tp-panel snmp
+Terminal=false
+Categories=config-panel
+X-TP-Category=Manageability
+Keywords=snmp;monitor;trap;nagios;

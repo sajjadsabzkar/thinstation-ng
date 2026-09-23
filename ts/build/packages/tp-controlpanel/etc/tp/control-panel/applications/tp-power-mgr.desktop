@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Power Manager
+Comment=Display blanking, suspend and the power button
+Icon=power
+Exec=sudo tp-panel power
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+Keywords=power;sleep;suspend;dpms;blank;battery;

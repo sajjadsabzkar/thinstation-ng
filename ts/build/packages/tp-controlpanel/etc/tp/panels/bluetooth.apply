@@ -1,0 +1,23 @@
+#!/bin/sh
+# Applies root/bluetooth/enabled.
+
+. /etc/tp/panels/common 2>/dev/null
+
+ENABLED=`tpreg get root/bluetooth/enabled`
+
+command -v bluetoothctl >/dev/null 2>&1 || {
+	echo "bluez is not in this image" >&2
+	exit 1
+}
+
+if is_true "$ENABLED"; then
+	systemctl enable bluetooth 2>/dev/null
+	systemctl start bluetooth 2>/dev/null
+	bluetoothctl power on >/dev/null 2>&1
+	rfkill unblock bluetooth 2>/dev/null
+else
+	bluetoothctl power off >/dev/null 2>&1
+	systemctl stop bluetooth 2>/dev/null
+	systemctl disable bluetooth 2>/dev/null
+fi
+exit 0

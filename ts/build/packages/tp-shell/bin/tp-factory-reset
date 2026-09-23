@@ -1,0 +1,32 @@
+#!/bin/sh
+# Puts the client back to the state the image shipped in.
+#
+# Nothing here touches the image: it is a read-only squashfs and cannot be
+# changed at runtime. Everything this client has ever been told is in the
+# writable layer, so removing that layer is the whole of a factory reset.
+
+. /etc/thinstation.global 2>/dev/null
+
+TPDIR=/var/lib/tp
+
+if [ ! -d "$TPDIR" ]; then
+	echo "nothing to reset"
+	exit 0
+fi
+
+# One last snapshot, in case this was a mistake and somebody gets to the
+# client before it reboots.
+tp-snapshot create "before-factory-reset-`date '+%Y%m%d-%H%M%S'`" >/dev/null 2>&1
+
+rm -f "$TPDIR/registry.conf" 2>/dev/null
+rm -rf "$TPDIR/connections" 2>/dev/null
+
+# Recreate the empty user layer so the next boot does not have to.
+: > "$TPDIR/registry.conf" 2>/dev/null
+[ -n "$TS_USER" ] && chown "$TS_USER" "$TPDIR/registry.conf" 2>/dev/null
+
+echo "Settings removed. Restarting."
+
+# Give the panel a moment to show that line before the screen goes away.
+( sleep 2; systemctl reboot 2>/dev/null || reboot ) &
+exit 0

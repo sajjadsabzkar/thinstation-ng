@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Restart Plan
+Comment=Restart this client on a schedule
+Icon=restart
+Exec=sudo tp-panel restartplan
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+Keywords=restart;reboot;schedule;cron;

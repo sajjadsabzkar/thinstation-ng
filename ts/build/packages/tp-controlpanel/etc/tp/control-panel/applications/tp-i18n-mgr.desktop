@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Language
+Comment=System language and keyboard layout
+Icon=language
+Exec=sudo tp-panel language
+Terminal=false
+Categories=config-panel
+X-TP-Category=Appearance
+Keywords=language;locale;i18n;translation;

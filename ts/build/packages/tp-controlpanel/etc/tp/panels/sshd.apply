@@ -1,0 +1,48 @@
+#!/bin/sh
+# Applies root/sshd/* to the ssh daemon.
+#
+# Writes a drop-in rather than editing sshd_config: the image's own config is
+# read-only, and a drop-in is easier to undo than a patched file.
+
+. /etc/tp/panels/common 2>/dev/null
+
+ENABLED=`tpreg get root/sshd/enabled`
+PORT=`tpreg get root/sshd/port`
+PWAUTH=`tpreg get root/sshd/passwordAuthentication`
+ROOTLOGIN=`tpreg get root/sshd/permitRootLogin`
+
+if ! command -v sshd >/dev/null 2>&1; then
+	echo "sshd is not in this image" >&2
+	exit 1
+fi
+
+if ! is_true "$ENABLED"; then
+	systemctl stop sshd 2>/dev/null
+	systemctl disable sshd 2>/dev/null
+	exit 0
+fi
+
+DROPIN=/etc/ssh/sshd_config.d/10-tp.conf
+mkdir -p /etc/ssh/sshd_config.d 2>/dev/null
+
+{
+	echo "# Written by the SSHD Manager panel. Changes here are overwritten."
+	[ -n "$PORT" ] && echo "Port $PORT"
+	if is_true "$PWAUTH"; then echo "PasswordAuthentication yes"
+	else echo "PasswordAuthentication no"; fi
+	if is_true "$ROOTLOGIN"; then echo "PermitRootLogin yes"
+	else echo "PermitRootLogin no"; fi
+} > "$DROPIN" 2>/dev/null || {
+	echo "cannot write $DROPIN" >&2
+	exit 1
+}
+
+# Host keys are not in a read-only image; generate them once on first use.
+ssh-keygen -A >/dev/null 2>&1
+
+systemctl enable sshd 2>/dev/null
+systemctl restart sshd 2>/dev/null || {
+	echo "sshd did not restart" >&2
+	exit 1
+}
+exit 0

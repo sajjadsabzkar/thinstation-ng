@@ -1,0 +1,34 @@
+#!/bin/sh
+# Locks the screen.
+#
+# ThinPro has hptc-lockscreen. Which locker is in the image depends on what
+# build.conf selected, so try them in turn and fall back to blanking, which
+# at least hides what was on screen even though it does not ask for a
+# password.
+
+[ -n "$DISPLAY" ] || export DISPLAY=:0
+
+for l in xsecurelock slock i3lock xlock light-locker-command; do
+	if command -v "$l" >/dev/null 2>&1; then
+		case "$l" in
+		light-locker-command)	exec light-locker-command -l ;;
+		xlock)			exec xlock -mode blank ;;
+		*)			exec "$l" ;;
+		esac
+	fi
+done
+
+if command -v xdg-screensaver >/dev/null 2>&1; then
+	xdg-screensaver lock 2>/dev/null && exit 0
+fi
+
+# Nothing that locks. Blank the screen and say plainly that it is not a lock,
+# rather than leaving someone believing the client is secured when it is not.
+if command -v xset >/dev/null 2>&1; then
+	xset dpms force off 2>/dev/null
+	echo "No screen locker is installed: the display was blanked but not locked." >&2
+	exit 1
+fi
+
+echo "No way to lock or blank the screen in this image." >&2
+exit 1

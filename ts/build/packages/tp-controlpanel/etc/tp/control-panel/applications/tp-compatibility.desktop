@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Compatibility Check
+Comment=What this hardware can and cannot do
+Icon=compat
+Exec=tp-panel compat
+Terminal=false
+Categories=config-panel
+X-TP-Category=Advanced
+Keywords=compatibility;hardware;check;test;

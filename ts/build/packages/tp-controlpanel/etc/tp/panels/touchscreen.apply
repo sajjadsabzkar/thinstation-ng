@@ -1,0 +1,34 @@
+#!/bin/sh
+# Applies root/touchscreen/* with xinput.
+#
+# The rotation matrix is the part worth having: a panel mounted sideways
+# reports coordinates in its own frame, and without this the pointer moves at
+# right angles to the finger.
+
+. /etc/tp/panels/common 2>/dev/null
+
+DEVICE=`tpreg get root/touchscreen/device`
+ROTATION=`tpreg get root/touchscreen/rotation`
+TAP=`tpreg get root/touchscreen/tapToClick`
+
+command -v xinput >/dev/null 2>&1 || exit 0
+[ -n "$DISPLAY" ] || export DISPLAY=:0
+
+if [ -z "$DEVICE" ]; then
+	DEVICE=`xinput list --name-only 2>/dev/null | grep -iE 'touch|finger' | head -1`
+fi
+[ -n "$DEVICE" ] || exit 0
+
+case "$ROTATION" in
+left)		matrix="0 -1 1 1 0 0 0 0 1" ;;
+right)		matrix="0 1 0 -1 0 1 0 0 1" ;;
+inverted)	matrix="-1 0 1 0 -1 1 0 0 1" ;;
+*)		matrix="1 0 0 0 1 0 0 0 1" ;;
+esac
+
+xinput set-prop "$DEVICE" "Coordinate Transformation Matrix" $matrix 2>/dev/null
+
+if is_true "$TAP"; then tapval=1; else tapval=0; fi
+xinput set-prop "$DEVICE" "libinput Tapping Enabled" $tapval 2>/dev/null
+
+exit 0

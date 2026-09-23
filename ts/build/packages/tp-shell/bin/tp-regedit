@@ -1,0 +1,61 @@
+#!/bin/sh
+# The write half of the Registry Editor panel.
+#
+# A panel field cannot call tpreg directly for this, because the key to write
+# is itself held in a key: the command would have to expand one registry
+# value into the argument of another. Doing that in one place, with the
+# checks, is safer than doing it in a shell fragment inside the registry.
+
+case "$1" in
+set)
+	key="$2"
+	value="$3"
+	;;
+unset)
+	key="$2"
+	;;
+*)
+	echo "usage: tp-regedit set <key> <value> | unset <key>" >&2
+	exit 2
+	;;
+esac
+
+if [ -z "$key" ]; then
+	echo "no key given" >&2
+	exit 2
+fi
+
+# Everything lives under root/. A key without it is a typo, and writing it
+# would put an entry in the file that nothing will ever read.
+case "$key" in
+root/*) ;;
+*)
+	echo "keys start with root/ - '$key' does not" >&2
+	exit 2
+	;;
+esac
+
+# The editor's own scratch keys are not worth writing and would confuse
+# anyone reading the file later.
+case "$key" in
+root/regedit/*)
+	echo "that key belongs to the editor itself" >&2
+	exit 2
+	;;
+esac
+
+if [ "$1" = "unset" ]; then
+	tpreg unset "$key" 2>/dev/null || {
+		echo "could not reset $key" >&2
+		exit 1
+	}
+	echo "$key is back to its shipped default: `tpreg get "$key" 2>/dev/null`"
+	exit 0
+fi
+
+tpreg set "$key" "$value" || {
+	echo "could not write $key" >&2
+	exit 1
+}
+echo "$key = `tpreg get "$key" 2>/dev/null`"
+exit 0

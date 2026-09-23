@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Firewall Manager
+Comment=What may reach this client
+Icon=firewall
+Exec=sudo tp-panel firewall
+Terminal=false
+Categories=config-panel
+X-TP-Category=Security
+Keywords=firewall;nftables;port;block;

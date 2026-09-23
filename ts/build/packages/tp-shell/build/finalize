@@ -1,0 +1,2 @@
+#tp-shell 40
+systemctl enable tp-logship.service

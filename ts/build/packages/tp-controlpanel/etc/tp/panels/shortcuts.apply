@@ -1,0 +1,55 @@
+#!/bin/sh
+# Writes root/shortcuts/* into openbox's rc.xml.
+#
+# openbox has no command to add a binding, so the file is generated: a
+# marked block is replaced each time, leaving anything else in rc.xml alone.
+
+. /etc/tp/panels/common 2>/dev/null
+
+RC="$HOME/.config/openbox/rc.xml"
+[ -n "$HOME" ] || RC=/var/lib/tp/openbox/rc.xml
+
+CM=`tpreg get root/shortcuts/connectionManager`
+CP=`tpreg get root/shortcuts/controlPanel`
+TERM=`tpreg get root/shortcuts/terminal`
+LOCK=`tpreg get root/shortcuts/lockScreen`
+
+mkdir -p "`dirname "$RC"`" 2>/dev/null || {
+	echo "cannot create `dirname "$RC"`" >&2
+	exit 1
+}
+
+# The bindings as their own file, included from rc.xml. Generating the whole
+# rc.xml would throw away the theme and the desktop count with it.
+FRAG="`dirname "$RC"`/tp-keybindings.xml"
+
+emit() {
+	key="$1"; command="$2"
+	[ -n "$key" ] || return 0
+	cat <<XML
+  <keybind key="$key">
+    <action name="Execute"><command>$command</command></action>
+  </keybind>
+XML
+}
+
+{
+	echo "<!-- Written by the Keyboard Shortcuts panel. Changes are overwritten. -->"
+	echo "<keyboard>"
+	emit "$CM"   "tp-connmgr"
+	emit "$CP"   "tp-controlpanel"
+	emit "$TERM" "tp-xterm"
+	emit "$LOCK" "tp-lock"
+	echo "</keyboard>"
+} > "$FRAG" 2>/dev/null || {
+	echo "cannot write $FRAG" >&2
+	exit 1
+}
+
+# openbox rereads its configuration on this signal; no need to restart the
+# window manager and take the session's windows with it.
+if command -v openbox >/dev/null 2>&1; then
+	openbox --reconfigure 2>/dev/null
+fi
+
+exit 0

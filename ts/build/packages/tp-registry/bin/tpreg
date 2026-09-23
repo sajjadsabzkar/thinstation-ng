@@ -31,6 +31,7 @@ Usage: tpreg <command> [arguments]
   get <key>                 Print a value. Exits 1 if the key is unset.
   set <key> <value>         Write a value to the user layer.
   del <key>                 Remove a key. Tombstoned if it has a default.
+  unset <key>               Drop the local value so the default applies again.
   has <key>                 Exit 0 if the key exists, 1 otherwise.
   test <key> <value>        Exit 0 if the key equals value.
 
@@ -106,6 +107,20 @@ cmd_set()
 	local tmp="$TP_REGISTRY.$$"
 	grep -Ev "^`esc_key \"$key\"`=" "$TP_REGISTRY" > "$tmp" 2>/dev/null
 	echo "$key=$value" >> "$tmp"
+	chmod 0600 "$tmp"
+	mv -f "$tmp" "$TP_REGISTRY"
+}
+
+cmd_unset()
+{
+	# Removes the local value so the shipped default shows through again.
+	# This is not 'del': del writes a tombstone precisely so that a key the
+	# defaults define stays deleted, which is the opposite of what someone
+	# pressing "put this back how it came" means.
+	local key="$1"
+	ensure_store
+	local tmp="$TP_REGISTRY.$$"
+	grep -Ev "^`esc_key \"$key\"`=" "$TP_REGISTRY" > "$tmp" 2>/dev/null
 	chmod 0600 "$tmp"
 	mv -f "$tmp" "$TP_REGISTRY"
 }
@@ -232,6 +247,7 @@ case "$1" in
 get)		shift; cmd_get "$@" ;;
 set)		shift; cmd_set "$@" ;;
 del)		shift; cmd_del "$@" ;;
+unset)		shift; cmd_unset "$@" ;;
 has)		shift; cmd_get "$1" >/dev/null ;;
 test)		shift; [ "`cmd_get \"$1\"`" == "$2" ] ;;
 list)		shift; cmd_list "$@" ;;

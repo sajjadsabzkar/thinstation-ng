@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=X Terminal
+Comment=A shell on this client
+Icon=terminal
+Exec=sudo tp-xterm
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+Keywords=terminal;shell;console;xterm;

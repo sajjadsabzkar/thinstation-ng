@@ -1,0 +1,19 @@
+[Unit]
+Description=Ship client logs to the collector
+# After the network, because the first thing worth shipping is what happened
+# while the network was coming up, and that is already in the journal by now.
+After=network-online.target tsinit.target
+Wants=network-online.target
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/thinstation.env
+ExecStart=/bin/tp-logship
+# A collector that is down must not take the client with it.
+Restart=on-failure
+RestartSec=30
+SyslogIdentifier=tp-logship
+
+[Install]
+WantedBy=multi-user.target

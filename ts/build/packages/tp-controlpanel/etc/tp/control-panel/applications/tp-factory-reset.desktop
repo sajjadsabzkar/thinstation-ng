@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Factory Reset
+Comment=Remove every setting and start again
+Icon=reset
+Exec=sudo tp-panel factoryreset
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+Keywords=factory;reset;wipe;default;

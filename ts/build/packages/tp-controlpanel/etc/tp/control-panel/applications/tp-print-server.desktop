@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Printers
+Comment=Printers on this client and on the network
+Icon=printer
+Exec=sudo tp-panel printers
+Terminal=false
+Categories=config-panel
+X-TP-Category=Hardware
+Keywords=printer;cups;print;lpr;

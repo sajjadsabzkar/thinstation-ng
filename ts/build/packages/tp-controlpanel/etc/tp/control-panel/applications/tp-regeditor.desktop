@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Registry Editor
+Comment=Every setting on this client, one by one
+Icon=registry
+Exec=sudo tp-panel regedit
+Terminal=false
+Categories=config-panel
+X-TP-Category=Advanced
+Keywords=registry;regedit;key;value;advanced;

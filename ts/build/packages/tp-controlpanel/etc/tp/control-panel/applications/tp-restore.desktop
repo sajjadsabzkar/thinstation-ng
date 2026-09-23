@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Snapshots
+Comment=Save and restore this client's settings
+Icon=snapshot
+Exec=sudo tp-panel snapshots
+Terminal=false
+Categories=config-panel
+X-TP-Category=System
+Keywords=snapshot;backup;restore;revert;

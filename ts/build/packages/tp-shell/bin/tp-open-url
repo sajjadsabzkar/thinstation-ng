@@ -1,0 +1,15 @@
+#!/bin/sh
+# Opens a URL in whatever browser this image has.
+
+URL="$1"
+[ -n "$URL" ] || { echo "no URL given" >&2; exit 2; }
+
+for b in xdg-open firefox chromium chromium-browser google-chrome; do
+	if command -v "$b" >/dev/null 2>&1; then
+		exec "$b" "$URL" >/dev/null 2>&1
+	fi
+done
+
+echo "No browser is installed in this image." >&2
+echo "Open $URL from another machine instead." >&2
+exit 1

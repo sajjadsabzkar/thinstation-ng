@@ -1,0 +1,46 @@
+#!/bin/sh
+# Starts or stops the remote-assistance VNC server.
+#
+# Refuses to start without a password. An open VNC server on a client that
+# may be on a flat office network is worse than no remote assistance at all,
+# and this is the one place to catch that.
+
+. /etc/tp/panels/common 2>/dev/null
+
+ENABLED=`tpreg get root/vncshadow/enabled`
+PASSWORD=`tpreg get root/vncshadow/password`
+PORT=`tpreg get root/vncshadow/port`
+VIEWONLY=`tpreg get root/vncshadow/viewOnly`
+[ -n "$PORT" ] || PORT=5900
+
+pkill -x x11vnc 2>/dev/null
+
+is_true "$ENABLED" || exit 0
+
+if ! command -v x11vnc >/dev/null 2>&1; then
+	echo "x11vnc is not in this image" >&2
+	exit 1
+fi
+
+if [ -z "$PASSWORD" ]; then
+	echo "refusing to start without a password" >&2
+	exit 1
+fi
+
+PWFILE=/var/lib/tp/vncshadow.pw
+mkdir -p /var/lib/tp 2>/dev/null
+x11vnc -storepasswd "$PASSWORD" "$PWFILE" >/dev/null 2>&1 || {
+	echo "could not store the password" >&2
+	exit 1
+}
+chmod 0600 "$PWFILE" 2>/dev/null
+
+[ -n "$DISPLAY" ] || export DISPLAY=:0
+OPTS="-display $DISPLAY -rfbauth $PWFILE -rfbport $PORT -forever -shared -bg -o /var/log/x11vnc.log"
+is_true "$VIEWONLY" && OPTS="$OPTS -viewonly"
+
+x11vnc $OPTS >/dev/null 2>&1 || {
+	echo "x11vnc did not start" >&2
+	exit 1
+}
+exit 0

@@ -1,0 +1,93 @@
+#!/bin/sh
+# Carries a client's configuration to removable media and back.
+#
+# HP's ThinState does two jobs: capture a whole image to USB, and deploy that
+# image onto another client. The first half cannot be done honestly from
+# inside a running image here -- our rootfs is a squashfs inside an ISO, and
+# copying the device we booted from while it is mounted produces something
+# that may or may not boot. Writing the image belongs to the ISO or the .dd
+# file, so that is where it stays.
+#
+# The half that people actually do every day -- set one client up, then make
+# twenty more look the same -- is configuration, and that this does exactly.
+
+. /etc/thinstation.global 2>/dev/null
+
+PAYLOAD="tp-config.tar.gz"
+SOURCES="/var/lib/tp/registry.conf /var/lib/tp/connections"
+
+# Where a USB stick shows up depends on which automounter the image has, so
+# look at what is mounted rather than guessing a path.
+find_media() {
+	awk '$2 ~ /^\/(media|mnt|run\/media)\// && $3 !~ /^(tmpfs|proc|sysfs)$/ {print $2}' \
+		/proc/mounts 2>/dev/null | sort -u
+}
+
+case "$1" in
+media)
+	list=`find_media`
+	if [ "$2" = "--paths" ]; then
+		# For the panel's choice list: one path per line, nothing else.
+		printf '%s\n' "$list"
+		exit 0
+	fi
+	if [ -z "$list" ]; then
+		echo "no removable media is mounted"
+	else
+		printf '%s\n' "$list" | tr '\n' ' '
+	fi
+	;;
+capture)
+	target=`tpreg get root/thinstate/target 2>/dev/null`
+	[ -n "$target" ] || target=`find_media | head -1`
+	[ -n "$target" ] || { echo "no removable media is mounted" >&2; exit 1; }
+	[ -d "$target" ] || { echo "$target is not a directory" >&2; exit 1; }
+	[ -w "$target" ] || { echo "$target is not writable" >&2; exit 1; }
+
+	set --
+	for f in $SOURCES; do
+		[ -e "$f" ] && set -- "$@" "$f"
+	done
+	[ $# -gt 0 ] || { echo "this client has no settings to capture yet" >&2; exit 1; }
+
+	tar czf "$target/$PAYLOAD" "$@" 2>/dev/null || {
+		echo "could not write $target/$PAYLOAD" >&2; exit 1; }
+
+	# A note beside it, so someone finding the stick in a drawer in six
+	# months knows what it is and which client it came from.
+	{
+		echo "ThinPro-NG client configuration"
+		echo "captured: `date '+%Y-%m-%d %H:%M:%S'`"
+		echo "from:     `hostname 2>/dev/null`"
+	} > "$target/tp-config.txt" 2>/dev/null
+
+	sync 2>/dev/null
+	echo "captured to $target/$PAYLOAD"
+	echo "Safe to remove the media now."
+	;;
+deploy)
+	target=`tpreg get root/thinstate/target 2>/dev/null`
+	if [ -n "$target" ] && [ -r "$target/$PAYLOAD" ]; then
+		file="$target/$PAYLOAD"
+	else
+		file=""
+		for m in `find_media`; do
+			if [ -r "$m/$PAYLOAD" ]; then file="$m/$PAYLOAD"; break; fi
+		done
+	fi
+	[ -n "$file" ] || { echo "no $PAYLOAD found on any mounted media" >&2; exit 1; }
+
+	# Keep what is here now, so a wrong stick is not the end of the story.
+	tp-snapshot create "before-deploy-`date '+%Y%m%d-%H%M%S'`" >/dev/null 2>&1
+
+	tar xzf "$file" -C / 2>/dev/null || {
+		echo "could not unpack $file" >&2; exit 1; }
+	echo "deployed from $file"
+	echo "Log out and back in for every setting to take effect."
+	;;
+*)
+	echo "usage: tp-thinstate media [--paths]|capture|deploy" >&2
+	exit 2
+	;;
+esac
+exit 0

@@ -1,7 +1,12 @@
 AUDIO_LEVEL=90
 MIC_LEVEL=0
-SESSION_0_TYPE=xfwm4
-XFWM4_SESSION=wm
+# openbox is the window manager package, but the session it starts is
+# tp-session (etc/cmd/openbox.global), which reads root/wm/name from the
+# registry and can put kwin_x11 up instead. Leaving this at xfwm4 was what
+# made the first openbox build still boot the old xfce session: build.conf
+# selects the package, this file selects the session type, and both have to
+# agree.
+SESSION_0_TYPE=openbox
 SESSION_0_AUTOSTART=on
 XFWM4_COMPOSITING=true
 XFWM4_RED=0

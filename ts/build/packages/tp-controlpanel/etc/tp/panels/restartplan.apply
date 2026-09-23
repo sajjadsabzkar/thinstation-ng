@@ -1,0 +1,55 @@
+#!/bin/sh
+# Writes root/restartPlan/* into a cron entry.
+#
+# cron rather than a systemd timer because ThinStation already enables crond
+# and crontab at boot, so this needs nothing new in the image.
+
+. /etc/tp/panels/common 2>/dev/null
+
+CRONFILE=/etc/cron.d/tp-restart-plan
+
+ENABLED=`tpreg get root/restartPlan/enabled`
+TIME=`tpreg get root/restartPlan/time`
+DAYS=`tpreg get root/restartPlan/days`
+IDLE=`tpreg get root/restartPlan/onlyWhenIdle`
+
+if ! is_true "$ENABLED"; then
+	rm -f "$CRONFILE" 2>/dev/null
+	exit 0
+fi
+
+hour=`echo "$TIME" | cut -d: -f1`
+min=`echo "$TIME" | cut -d: -f2`
+
+case "$hour$min" in
+''|*[!0-9]*)
+	echo "restart plan: '$TIME' is not HH:MM" >&2
+	exit 1
+	;;
+esac
+
+case "$DAYS" in
+weekdays)	dow="1-5" ;;
+weekly)		dow="0" ;;
+*)		dow="*" ;;
+esac
+
+if is_true "$IDLE"; then
+	# A session running means someone is using this client. pgrep over the
+	# connection wrappers is the cheapest way to know.
+	cmd='pgrep -f "/etc/init.d/(freerdp|ica|horizon|firefox) " >/dev/null || systemctl reboot'
+else
+	cmd='systemctl reboot'
+fi
+
+{
+	echo "# Written by the Restart Plan panel. Changes here are overwritten."
+	echo "SHELL=/bin/sh"
+	echo "${min#0} ${hour#0} * * $dow root $cmd"
+} > "$CRONFILE" 2>/dev/null || {
+	echo "cannot write $CRONFILE" >&2
+	exit 1
+}
+
+chmod 0644 "$CRONFILE" 2>/dev/null
+exit 0

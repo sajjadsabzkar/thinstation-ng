@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=VNC Shadow
+Comment=Let a helpdesk see this screen
+Icon=vnc
+Exec=sudo tp-panel vncshadow
+Terminal=false
+Categories=config-panel
+X-TP-Category=Manageability
+Keywords=vnc;shadow;remote;assist;support;

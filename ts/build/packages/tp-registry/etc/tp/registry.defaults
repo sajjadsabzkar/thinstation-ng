@@ -424,3 +424,636 @@ root/ControlPanel/sysinfo/fields/macAddress/valueCommand=ip -o link show 2>/dev/
 root/ControlPanel/sysinfo/fields/uptime/label=Uptime
 root/ControlPanel/sysinfo/fields/uptime/type=info
 root/ControlPanel/sysinfo/fields/uptime/valueCommand=uptime -p 2>/dev/null || uptime
+
+# --- Logging (System) ------------------------------------------------------
+# ThinPro's logging plugin carries only a debug level and shows logs locally.
+# On a fleet of disk-less clients that is not enough: /var is a tmpfs, so
+# everything a failed boot had to say disappears when it reboots. The remote
+# half below is ours.
+root/logging/general/debugLevel=Notice
+root/logging/remote/enabled=0
+root/logging/remote/server=
+root/logging/remote/port=514
+root/logging/remote/facility=16
+
+root/ControlPanel/logging/title=System Logs
+root/ControlPanel/logging/fields=debugLevel remoteEnabled remoteServer remotePort localLog
+root/ControlPanel/logging/fields/debugLevel/label=Detail level
+root/ControlPanel/logging/fields/debugLevel/type=choice
+root/ControlPanel/logging/fields/debugLevel/key=root/logging/general/debugLevel
+root/ControlPanel/logging/fields/debugLevel/choices=Notice|Information|Debug|Trace
+root/ControlPanel/logging/fields/debugLevel/default=Notice
+root/ControlPanel/logging/fields/debugLevel/hint=Notice is right unless someone is investigating
+root/ControlPanel/logging/fields/remoteEnabled/label=Send logs to a collector
+root/ControlPanel/logging/fields/remoteEnabled/type=bool
+root/ControlPanel/logging/fields/remoteEnabled/key=root/logging/remote/enabled
+root/ControlPanel/logging/fields/remoteEnabled/default=0
+root/ControlPanel/logging/fields/remoteServer/label=Collector address
+root/ControlPanel/logging/fields/remoteServer/type=text
+root/ControlPanel/logging/fields/remoteServer/key=root/logging/remote/server
+root/ControlPanel/logging/fields/remoteServer/hint=Host name or IP of the syslog collector
+root/ControlPanel/logging/fields/remotePort/label=Collector port
+root/ControlPanel/logging/fields/remotePort/type=int
+root/ControlPanel/logging/fields/remotePort/key=root/logging/remote/port
+root/ControlPanel/logging/fields/remotePort/min=1
+root/ControlPanel/logging/fields/remotePort/max=65535
+root/ControlPanel/logging/fields/remotePort/default=514
+root/ControlPanel/logging/fields/localLog/label=Recent local log
+root/ControlPanel/logging/fields/localLog/type=info
+root/ControlPanel/logging/fields/localLog/valueCommand=journalctl -n 1 --no-pager -o short 2>/dev/null || tail -1 /var/log/messages 2>/dev/null
+
+# --- Window manager (Appearance) -------------------------------------------
+# Our stand-in for ThinPro's hptc-wm alternatives group, where kwin_x11 sits
+# at priority 60 and openbox at 50.
+root/wm/name=openbox
+
+root/ControlPanel/wm/title=Window Manager
+root/ControlPanel/wm/fields=name
+root/ControlPanel/wm/fields/name/label=Window manager
+root/ControlPanel/wm/fields/name/type=choice
+root/ControlPanel/wm/fields/name/key=root/wm/name
+root/ControlPanel/wm/fields/name/choices=openbox|kwin
+root/ControlPanel/wm/fields/name/default=openbox
+root/ControlPanel/wm/fields/name/hint=Takes effect at the next login. kwin needs far more memory.
+
+# ---------------------------------------------------------------------------
+# Phase 8 panels - the HP tools we had no equivalent for.
+#
+# Every one of these is named after the entry it replaces in ThinPro's
+# /etc/hptc-control-panel/applications, so an admin who knows that product
+# finds the same thing under the same name here.
+# ---------------------------------------------------------------------------
+
+# --- Power Manager (ThinPro: hptc-power-mgr, "Power Manager", System) -------
+root/power/screenBlankMinutes=10
+root/power/suspendMinutes=0
+root/power/powerButtonAction=shutdown
+root/power/dpmsEnabled=1
+
+root/ControlPanel/power/title=Power Manager
+root/ControlPanel/power/fields=dpmsEnabled screenBlankMinutes suspendMinutes powerButtonAction
+root/ControlPanel/power/fields/dpmsEnabled/label=Turn the display off when idle
+root/ControlPanel/power/fields/dpmsEnabled/type=bool
+root/ControlPanel/power/fields/dpmsEnabled/key=root/power/dpmsEnabled
+root/ControlPanel/power/fields/dpmsEnabled/default=1
+root/ControlPanel/power/fields/screenBlankMinutes/label=Display off after
+root/ControlPanel/power/fields/screenBlankMinutes/type=int
+root/ControlPanel/power/fields/screenBlankMinutes/key=root/power/screenBlankMinutes
+root/ControlPanel/power/fields/screenBlankMinutes/min=0
+root/ControlPanel/power/fields/screenBlankMinutes/max=240
+root/ControlPanel/power/fields/screenBlankMinutes/unit=minutes
+root/ControlPanel/power/fields/screenBlankMinutes/default=10
+root/ControlPanel/power/fields/screenBlankMinutes/hint=0 never blanks the screen
+root/ControlPanel/power/fields/suspendMinutes/label=Suspend after
+root/ControlPanel/power/fields/suspendMinutes/type=int
+root/ControlPanel/power/fields/suspendMinutes/key=root/power/suspendMinutes
+root/ControlPanel/power/fields/suspendMinutes/min=0
+root/ControlPanel/power/fields/suspendMinutes/max=240
+root/ControlPanel/power/fields/suspendMinutes/unit=minutes
+root/ControlPanel/power/fields/suspendMinutes/default=0
+root/ControlPanel/power/fields/suspendMinutes/hint=0 never suspends. A client in a session should usually stay awake.
+root/ControlPanel/power/fields/powerButtonAction/label=Power button
+root/ControlPanel/power/fields/powerButtonAction/type=choice
+root/ControlPanel/power/fields/powerButtonAction/key=root/power/powerButtonAction
+root/ControlPanel/power/fields/powerButtonAction/choices=shutdown|reboot|ask|ignore
+root/ControlPanel/power/fields/powerButtonAction/default=shutdown
+
+# --- Restart Plan (ThinPro: hptc-restart-plan, "Restart Plan", System) ------
+# A thin client that is never switched off drifts: leaked sessions, stale
+# mounts, a full tmpfs. ThinPro answers that with a scheduled reboot.
+root/restartPlan/enabled=0
+root/restartPlan/time=03:30
+root/restartPlan/days=daily
+root/restartPlan/onlyWhenIdle=1
+
+root/ControlPanel/restartplan/title=Restart Plan
+root/ControlPanel/restartplan/fields=enabled time days onlyWhenIdle current
+root/ControlPanel/restartplan/fields/enabled/label=Restart this client on a schedule
+root/ControlPanel/restartplan/fields/enabled/type=bool
+root/ControlPanel/restartplan/fields/enabled/key=root/restartPlan/enabled
+root/ControlPanel/restartplan/fields/enabled/default=0
+root/ControlPanel/restartplan/fields/time/label=Time
+root/ControlPanel/restartplan/fields/time/type=text
+root/ControlPanel/restartplan/fields/time/key=root/restartPlan/time
+root/ControlPanel/restartplan/fields/time/default=03:30
+root/ControlPanel/restartplan/fields/time/hint=24-hour HH:MM
+root/ControlPanel/restartplan/fields/days/label=Days
+root/ControlPanel/restartplan/fields/days/type=choice
+root/ControlPanel/restartplan/fields/days/key=root/restartPlan/days
+root/ControlPanel/restartplan/fields/days/choices=daily|weekdays|weekly
+root/ControlPanel/restartplan/fields/days/default=daily
+root/ControlPanel/restartplan/fields/onlyWhenIdle/label=Only when no session is running
+root/ControlPanel/restartplan/fields/onlyWhenIdle/type=bool
+root/ControlPanel/restartplan/fields/onlyWhenIdle/key=root/restartPlan/onlyWhenIdle
+root/ControlPanel/restartplan/fields/onlyWhenIdle/default=1
+root/ControlPanel/restartplan/fields/onlyWhenIdle/hint=Skips the restart if someone is connected
+root/ControlPanel/restartplan/fields/current/label=Scheduled now
+root/ControlPanel/restartplan/fields/current/type=info
+root/ControlPanel/restartplan/fields/current/valueCommand=cat /etc/cron.d/tp-restart-plan 2>/dev/null | grep -v '^#' | head -1 || echo "nothing scheduled"
+
+# --- Snapshots (ThinPro: hptc-restore, "Snapshots", System) ----------------
+# ThinPro takes btrfs snapshots because its rootfs is btrfs. Ours is a
+# read-only squashfs, so the only thing that can differ between two boots is
+# the writable configuration - and that is exactly what is worth keeping.
+root/snapshots/directory=/var/lib/tp/snapshots
+
+root/ControlPanel/snapshots/title=Snapshots
+root/ControlPanel/snapshots/fields=existing create restore remove
+root/ControlPanel/snapshots/fields/existing/label=Saved snapshots
+root/ControlPanel/snapshots/fields/existing/type=info
+root/ControlPanel/snapshots/fields/existing/valueCommand=ls -1 /var/lib/tp/snapshots 2>/dev/null | sed 's/\.tar\.gz$//' | tr '\n' ' ' | sed 's/^$/none/'
+root/ControlPanel/snapshots/fields/create/label=Take a snapshot of the current settings
+root/ControlPanel/snapshots/fields/create/type=action
+root/ControlPanel/snapshots/fields/create/buttonText=Take snapshot now
+root/ControlPanel/snapshots/fields/create/command=tp-snapshot create
+root/ControlPanel/snapshots/fields/restore/label=Restore
+root/ControlPanel/snapshots/fields/restore/type=action
+root/ControlPanel/snapshots/fields/restore/buttonText=Restore the newest snapshot
+root/ControlPanel/snapshots/fields/restore/command=tp-snapshot restore
+root/ControlPanel/snapshots/fields/restore/confirm=Replace the current settings with the newest snapshot?
+root/ControlPanel/snapshots/fields/remove/label=Delete
+root/ControlPanel/snapshots/fields/remove/type=action
+root/ControlPanel/snapshots/fields/remove/buttonText=Delete the oldest snapshot
+root/ControlPanel/snapshots/fields/remove/command=tp-snapshot prune
+
+# --- Factory Reset (ThinPro: hptc-factory-reset, "Factory Reset", System) --
+root/ControlPanel/factoryreset/title=Factory Reset
+root/ControlPanel/factoryreset/fields=explain reset
+root/ControlPanel/factoryreset/fields/explain/label=What this does
+root/ControlPanel/factoryreset/fields/explain/type=info
+root/ControlPanel/factoryreset/fields/explain/valueCommand=echo "Removes every setting made on this client and restarts it. The image itself is read-only and is not touched."
+root/ControlPanel/factoryreset/fields/reset/label=Reset
+root/ControlPanel/factoryreset/fields/reset/type=action
+root/ControlPanel/factoryreset/fields/reset/buttonText=Reset this client and restart
+root/ControlPanel/factoryreset/fields/reset/command=tp-factory-reset
+root/ControlPanel/factoryreset/fields/reset/confirm=Every connection and setting on this client will be deleted and the client will restart. Continue?
+
+# --- Task Manager (ThinPro: hptc-task-mgr, "Task Manager") -----------------
+root/ControlPanel/taskmgr/title=Task Manager
+root/ControlPanel/taskmgr/fields=load show killPid kill
+root/ControlPanel/taskmgr/fields/load/label=Load and memory
+root/ControlPanel/taskmgr/fields/load/type=info
+root/ControlPanel/taskmgr/fields/load/valueCommand=printf '%s  -  ' "$(cut -d' ' -f1-3 /proc/loadavg)"; free -m 2>/dev/null | awk '/^Mem:/{printf "%d MB used of %d MB", $3, $2}'
+root/ControlPanel/taskmgr/fields/show/label=Processes
+root/ControlPanel/taskmgr/fields/show/type=action
+root/ControlPanel/taskmgr/fields/show/buttonText=Show the busiest processes
+root/ControlPanel/taskmgr/fields/show/command=ps -eo pid,user,pcpu,pmem,etime,comm --sort=-pcpu 2>/dev/null | head -30
+root/ControlPanel/taskmgr/fields/killPid/label=Process id
+root/ControlPanel/taskmgr/fields/killPid/type=text
+root/ControlPanel/taskmgr/fields/killPid/key=root/taskmgr/lastPid
+root/ControlPanel/taskmgr/fields/killPid/hint=The pid from the list above
+root/ControlPanel/taskmgr/fields/kill/label=End process
+root/ControlPanel/taskmgr/fields/kill/type=action
+root/ControlPanel/taskmgr/fields/kill/buttonText=End that process
+root/ControlPanel/taskmgr/fields/kill/command=tp-killpid "$(tpreg get root/taskmgr/lastPid)"
+root/ControlPanel/taskmgr/fields/kill/confirm=End this process?
+
+# --- Administrator/User Mode (ThinPro: hptc-switch-admin, Security) --------
+root/ControlPanel/switchadmin/title=Administrator/User Mode Switch
+root/ControlPanel/switchadmin/fields=state enter leave
+root/ControlPanel/switchadmin/fields/state/label=Current mode
+root/ControlPanel/switchadmin/fields/state/type=info
+root/ControlPanel/switchadmin/fields/state/valueCommand=if [ "$(tpreg get root/users/${USER:-user}/adminMode)" = "1" ]; then echo Administrator; else echo User; fi
+root/ControlPanel/switchadmin/fields/enter/label=Enter administrator mode
+root/ControlPanel/switchadmin/fields/enter/type=action
+root/ControlPanel/switchadmin/fields/enter/buttonText=Enter administrator mode
+root/ControlPanel/switchadmin/fields/enter/command=tp-switch-admin enter
+root/ControlPanel/switchadmin/fields/leave/label=Leave administrator mode
+root/ControlPanel/switchadmin/fields/leave/type=action
+root/ControlPanel/switchadmin/fields/leave/buttonText=Return to user mode
+root/ControlPanel/switchadmin/fields/leave/command=tp-switch-admin leave
+
+# --- SSHD Manager (ThinPro: hptc-sshd-mgr, Manageability) ------------------
+root/sshd/enabled=0
+root/sshd/port=22
+root/sshd/permitRootLogin=0
+root/sshd/passwordAuthentication=1
+
+root/ControlPanel/sshd/title=SSHD Manager
+root/ControlPanel/sshd/fields=enabled port passwordAuthentication permitRootLogin state
+root/ControlPanel/sshd/fields/enabled/label=Allow ssh into this client
+root/ControlPanel/sshd/fields/enabled/type=bool
+root/ControlPanel/sshd/fields/enabled/key=root/sshd/enabled
+root/ControlPanel/sshd/fields/enabled/default=0
+root/ControlPanel/sshd/fields/enabled/hint=Off is the safe default for a client on an untrusted network
+root/ControlPanel/sshd/fields/port/label=Port
+root/ControlPanel/sshd/fields/port/type=int
+root/ControlPanel/sshd/fields/port/key=root/sshd/port
+root/ControlPanel/sshd/fields/port/min=1
+root/ControlPanel/sshd/fields/port/max=65535
+root/ControlPanel/sshd/fields/port/default=22
+root/ControlPanel/sshd/fields/passwordAuthentication/label=Allow password login
+root/ControlPanel/sshd/fields/passwordAuthentication/type=bool
+root/ControlPanel/sshd/fields/passwordAuthentication/key=root/sshd/passwordAuthentication
+root/ControlPanel/sshd/fields/passwordAuthentication/default=1
+root/ControlPanel/sshd/fields/permitRootLogin/label=Allow root to log in
+root/ControlPanel/sshd/fields/permitRootLogin/type=bool
+root/ControlPanel/sshd/fields/permitRootLogin/key=root/sshd/permitRootLogin
+root/ControlPanel/sshd/fields/permitRootLogin/default=0
+root/ControlPanel/sshd/fields/state/label=Status
+root/ControlPanel/sshd/fields/state/type=info
+root/ControlPanel/sshd/fields/state/valueCommand=systemctl is-active sshd 2>/dev/null || echo "not installed"
+
+# --- VNC Shadow (ThinPro: hptc-vncshadow, Manageability) -------------------
+# Lets a helpdesk see and drive the client's screen. ThinPro guards it with a
+# prompt on the client so nobody is watched without knowing.
+root/vncshadow/enabled=0
+root/vncshadow/port=5900
+root/vncshadow/viewOnly=0
+root/vncshadow/askPermission=1
+
+root/ControlPanel/vncshadow/title=VNC Shadow
+root/ControlPanel/vncshadow/fields=enabled password port viewOnly askPermission available state
+root/ControlPanel/vncshadow/fields/enabled/label=Allow remote assistance
+root/ControlPanel/vncshadow/fields/enabled/type=bool
+root/ControlPanel/vncshadow/fields/enabled/key=root/vncshadow/enabled
+root/ControlPanel/vncshadow/fields/enabled/default=0
+root/ControlPanel/vncshadow/fields/password/label=Password
+root/ControlPanel/vncshadow/fields/password/type=password
+root/ControlPanel/vncshadow/fields/password/key=root/vncshadow/password
+root/ControlPanel/vncshadow/fields/password/hint=Required. Without one anyone on the network could watch.
+root/ControlPanel/vncshadow/fields/port/label=Port
+root/ControlPanel/vncshadow/fields/port/type=int
+root/ControlPanel/vncshadow/fields/port/key=root/vncshadow/port
+root/ControlPanel/vncshadow/fields/port/min=1
+root/ControlPanel/vncshadow/fields/port/max=65535
+root/ControlPanel/vncshadow/fields/port/default=5900
+root/ControlPanel/vncshadow/fields/viewOnly/label=Watch only, no keyboard or mouse
+root/ControlPanel/vncshadow/fields/viewOnly/type=bool
+root/ControlPanel/vncshadow/fields/viewOnly/key=root/vncshadow/viewOnly
+root/ControlPanel/vncshadow/fields/viewOnly/default=0
+root/ControlPanel/vncshadow/fields/askPermission/label=Ask the person at the client first
+root/ControlPanel/vncshadow/fields/askPermission/type=bool
+root/ControlPanel/vncshadow/fields/askPermission/key=root/vncshadow/askPermission
+root/ControlPanel/vncshadow/fields/askPermission/default=1
+root/ControlPanel/vncshadow/fields/available/label=Server
+root/ControlPanel/vncshadow/fields/available/type=info
+root/ControlPanel/vncshadow/fields/available/valueCommand=command -v x11vnc >/dev/null 2>&1 && echo "x11vnc is installed" || echo "x11vnc is NOT in this image - add 'package x11vnc' to build.conf"
+root/ControlPanel/vncshadow/fields/state/label=Status
+root/ControlPanel/vncshadow/fields/state/type=info
+root/ControlPanel/vncshadow/fields/state/valueCommand=pgrep -x x11vnc >/dev/null 2>&1 && echo running || echo stopped
+
+# --- SNMP (ThinPro: hptc-snmp-mgr, Manageability) --------------------------
+root/snmp/enabled=0
+root/snmp/community=public
+root/snmp/location=
+root/snmp/contact=
+root/snmp/trapSink=
+
+root/ControlPanel/snmp/title=SNMP
+root/ControlPanel/snmp/fields=enabled community location contact trapSink available
+root/ControlPanel/snmp/fields/enabled/label=Answer SNMP queries
+root/ControlPanel/snmp/fields/enabled/type=bool
+root/ControlPanel/snmp/fields/enabled/key=root/snmp/enabled
+root/ControlPanel/snmp/fields/enabled/default=0
+root/ControlPanel/snmp/fields/community/label=Community
+root/ControlPanel/snmp/fields/community/type=text
+root/ControlPanel/snmp/fields/community/key=root/snmp/community
+root/ControlPanel/snmp/fields/community/default=public
+root/ControlPanel/snmp/fields/community/hint=Change this. 'public' is readable by anyone who asks.
+root/ControlPanel/snmp/fields/location/label=Location
+root/ControlPanel/snmp/fields/location/type=text
+root/ControlPanel/snmp/fields/location/key=root/snmp/location
+root/ControlPanel/snmp/fields/location/hint=Where this client physically is
+root/ControlPanel/snmp/fields/contact/label=Contact
+root/ControlPanel/snmp/fields/contact/type=text
+root/ControlPanel/snmp/fields/contact/key=root/snmp/contact
+root/ControlPanel/snmp/fields/trapSink/label=Trap receiver
+root/ControlPanel/snmp/fields/trapSink/type=text
+root/ControlPanel/snmp/fields/trapSink/key=root/snmp/trapSink
+root/ControlPanel/snmp/fields/trapSink/hint=Host that should be told when this client comes up
+root/ControlPanel/snmp/fields/available/label=Server
+root/ControlPanel/snmp/fields/available/type=info
+root/ControlPanel/snmp/fields/available/valueCommand=command -v snmpd >/dev/null 2>&1 && echo "snmpd is installed" || echo "snmpd is NOT in this image - add 'package net-snmp' to build.conf"
+
+# --- ThinState (ThinPro: hptc-thinstate, Manageability) --------------------
+# HP's ThinState captures a whole image to USB and writes it onto another
+# client. Half of that we cannot do from inside a running read-only image,
+# but the half that matters day to day - carrying a configured client's
+# settings to the next one - we can, and that is what this does.
+root/thinstate/target=
+
+root/ControlPanel/thinstate/title=ThinState
+root/ControlPanel/thinstate/fields=media target capture deploy explain
+root/ControlPanel/thinstate/fields/media/label=Removable media found
+root/ControlPanel/thinstate/fields/media/type=info
+root/ControlPanel/thinstate/fields/media/valueCommand=tp-thinstate media
+root/ControlPanel/thinstate/fields/target/label=Write to
+root/ControlPanel/thinstate/fields/target/type=choice
+root/ControlPanel/thinstate/fields/target/key=root/thinstate/target
+root/ControlPanel/thinstate/fields/target/choicesCommand=tp-thinstate media --paths
+root/ControlPanel/thinstate/fields/target/hint=A mounted USB stick
+root/ControlPanel/thinstate/fields/capture/label=Capture
+root/ControlPanel/thinstate/fields/capture/type=action
+root/ControlPanel/thinstate/fields/capture/buttonText=Capture this client's settings to the media
+root/ControlPanel/thinstate/fields/capture/command=tp-thinstate capture
+root/ControlPanel/thinstate/fields/deploy/label=Deploy
+root/ControlPanel/thinstate/fields/deploy/type=action
+root/ControlPanel/thinstate/fields/deploy/buttonText=Apply settings found on the media to this client
+root/ControlPanel/thinstate/fields/deploy/command=tp-thinstate deploy
+root/ControlPanel/thinstate/fields/deploy/confirm=Replace this client's settings with the ones on the media?
+root/ControlPanel/thinstate/fields/explain/label=Note
+root/ControlPanel/thinstate/fields/explain/type=info
+root/ControlPanel/thinstate/fields/explain/valueCommand=echo "Carries settings and connections, not the image. The image is written with the ISO or the .dd file."
+
+# --- Background Manager (ThinPro: hptc-background-mgr, Appearance) ---------
+root/background/mode=colour
+root/background/colour=#1F2933
+root/background/image=
+root/background/imageMode=scale
+
+root/ControlPanel/background/title=Background Manager
+root/ControlPanel/background/fields=mode colour image imageMode preview
+root/ControlPanel/background/fields/mode/label=Background
+root/ControlPanel/background/fields/mode/type=choice
+root/ControlPanel/background/fields/mode/key=root/background/mode
+root/ControlPanel/background/fields/mode/choices=colour|image
+root/ControlPanel/background/fields/mode/default=colour
+root/ControlPanel/background/fields/colour/label=Colour
+root/ControlPanel/background/fields/colour/type=text
+root/ControlPanel/background/fields/colour/key=root/background/colour
+root/ControlPanel/background/fields/colour/default=#1F2933
+root/ControlPanel/background/fields/colour/hint=#RRGGBB
+root/ControlPanel/background/fields/image/label=Image file
+root/ControlPanel/background/fields/image/type=choice
+root/ControlPanel/background/fields/image/key=root/background/image
+root/ControlPanel/background/fields/image/choicesCommand=ls -1 /usr/share/backgrounds/*.png /usr/share/backgrounds/*.jpg /var/lib/tp/backgrounds/* 2>/dev/null
+root/ControlPanel/background/fields/image/hint=Put your own files in /var/lib/tp/backgrounds
+root/ControlPanel/background/fields/imageMode/label=Fit
+root/ControlPanel/background/fields/imageMode/type=choice
+root/ControlPanel/background/fields/imageMode/key=root/background/imageMode
+root/ControlPanel/background/fields/imageMode/choices=scale|centre|tile
+root/ControlPanel/background/fields/imageMode/default=scale
+root/ControlPanel/background/fields/preview/label=Tools
+root/ControlPanel/background/fields/preview/type=info
+root/ControlPanel/background/fields/preview/valueCommand=if command -v feh >/dev/null 2>&1; then echo "feh is installed - images will work"; elif command -v xsetroot >/dev/null 2>&1; then echo "only xsetroot is installed - colour works, images do not"; else echo "no tool to paint the root window"; fi
+
+# --- Language (ThinPro: hptc-i18n-mgr, Appearance) -------------------------
+root/i18n/locale=en_US.UTF-8
+
+root/ControlPanel/language/title=Language
+root/ControlPanel/language/fields=locale keyboard current
+root/ControlPanel/language/fields/locale/label=Language
+root/ControlPanel/language/fields/locale/type=choice
+root/ControlPanel/language/fields/locale/key=root/i18n/locale
+root/ControlPanel/language/fields/locale/choices=en_US.UTF-8|fa_IR.UTF-8|de_DE.UTF-8|fr_FR.UTF-8|es_ES.UTF-8|it_IT.UTF-8|nl_NL.UTF-8|pt_BR.UTF-8|ru_RU.UTF-8|tr_TR.UTF-8|ar_SA.UTF-8|zh_CN.UTF-8
+root/ControlPanel/language/fields/locale/default=en_US.UTF-8
+root/ControlPanel/language/fields/locale/hint=Takes effect at the next login
+root/ControlPanel/language/fields/keyboard/label=Keyboard layout
+root/ControlPanel/language/fields/keyboard/type=choice
+root/ControlPanel/language/fields/keyboard/key=root/keyboard/layout
+root/ControlPanel/language/fields/keyboard/choicesCommand=ls -1 /usr/share/X11/xkb/symbols 2>/dev/null | grep -vE '^(group|level|srvr_ctrl|keypad|capslock|ctrl|shift|altwin|compose|eurosign|nbsp|pc|inet|typo|terminate)' | head -60
+root/ControlPanel/language/fields/current/label=Now
+root/ControlPanel/language/fields/current/type=info
+root/ControlPanel/language/fields/current/valueCommand=echo "${LANG:-not set}"
+
+# --- Keyboard Shortcuts (ThinPro: hptc-shortcut-mgr, Input Devices) --------
+# openbox reads its bindings from rc.xml, so the apply hook writes that file
+# from these keys. The four below are the ones a thin client actually needs;
+# anything more belongs in rc.xml by hand.
+root/shortcuts/connectionManager=W-c
+root/shortcuts/controlPanel=W-p
+root/shortcuts/terminal=W-t
+root/shortcuts/lockScreen=W-l
+
+root/ControlPanel/shortcuts/title=Keyboard Shortcuts
+root/ControlPanel/shortcuts/fields=connectionManager controlPanel terminal lockScreen syntax
+root/ControlPanel/shortcuts/fields/connectionManager/label=Connection Manager
+root/ControlPanel/shortcuts/fields/connectionManager/type=text
+root/ControlPanel/shortcuts/fields/connectionManager/key=root/shortcuts/connectionManager
+root/ControlPanel/shortcuts/fields/connectionManager/default=W-c
+root/ControlPanel/shortcuts/fields/controlPanel/label=Control Panel
+root/ControlPanel/shortcuts/fields/controlPanel/type=text
+root/ControlPanel/shortcuts/fields/controlPanel/key=root/shortcuts/controlPanel
+root/ControlPanel/shortcuts/fields/controlPanel/default=W-p
+root/ControlPanel/shortcuts/fields/terminal/label=Terminal
+root/ControlPanel/shortcuts/fields/terminal/type=text
+root/ControlPanel/shortcuts/fields/terminal/key=root/shortcuts/terminal
+root/ControlPanel/shortcuts/fields/terminal/default=W-t
+root/ControlPanel/shortcuts/fields/lockScreen/label=Lock the screen
+root/ControlPanel/shortcuts/fields/lockScreen/type=text
+root/ControlPanel/shortcuts/fields/lockScreen/key=root/shortcuts/lockScreen
+root/ControlPanel/shortcuts/fields/lockScreen/default=W-l
+root/ControlPanel/shortcuts/fields/syntax/label=How to write these
+root/ControlPanel/shortcuts/fields/syntax/type=info
+root/ControlPanel/shortcuts/fields/syntax/valueCommand=echo "W = Windows key, C = Ctrl, A = Alt, S = Shift. So C-A-t is Ctrl+Alt+T. Empty removes the shortcut."
+
+# --- Touchscreen (ThinPro: hptc-touchscreen, Input Devices) ----------------
+root/touchscreen/device=
+root/touchscreen/rotation=none
+root/touchscreen/tapToClick=1
+
+root/ControlPanel/touchscreen/title=Touchscreen
+root/ControlPanel/touchscreen/fields=detected device rotation tapToClick calibrate
+root/ControlPanel/touchscreen/fields/detected/label=Detected
+root/ControlPanel/touchscreen/fields/detected/type=info
+root/ControlPanel/touchscreen/fields/detected/valueCommand=xinput list --name-only 2>/dev/null | grep -iE 'touch|finger' | tr '\n' ';' | sed 's/^$/no touchscreen found/'
+root/ControlPanel/touchscreen/fields/device/label=Device
+root/ControlPanel/touchscreen/fields/device/type=choice
+root/ControlPanel/touchscreen/fields/device/key=root/touchscreen/device
+root/ControlPanel/touchscreen/fields/device/choicesCommand=xinput list --name-only 2>/dev/null | grep -iE 'touch|finger'
+root/ControlPanel/touchscreen/fields/rotation/label=Match a rotated screen
+root/ControlPanel/touchscreen/fields/rotation/type=choice
+root/ControlPanel/touchscreen/fields/rotation/key=root/touchscreen/rotation
+root/ControlPanel/touchscreen/fields/rotation/choices=none|left|right|inverted
+root/ControlPanel/touchscreen/fields/rotation/default=none
+root/ControlPanel/touchscreen/fields/tapToClick/label=Tap to click
+root/ControlPanel/touchscreen/fields/tapToClick/type=bool
+root/ControlPanel/touchscreen/fields/tapToClick/key=root/touchscreen/tapToClick
+root/ControlPanel/touchscreen/fields/tapToClick/default=1
+root/ControlPanel/touchscreen/fields/calibrate/label=Calibrate
+root/ControlPanel/touchscreen/fields/calibrate/type=action
+root/ControlPanel/touchscreen/fields/calibrate/buttonText=Calibrate the touchscreen
+root/ControlPanel/touchscreen/fields/calibrate/command=xinput_calibrator 2>&1 || echo "xinput_calibrator is not in this image"
+root/ControlPanel/touchscreen/fields/calibrate/timeout=180
+
+# --- Registry Editor (ThinPro: regeditor, Advanced) ------------------------
+# ThinPro's regeditor is a tree over the whole Manticore registry. This is
+# the same idea over ours: look at everything, change one key at a time.
+root/ControlPanel/regedit/title=Registry Editor
+root/ControlPanel/regedit/fields=filter dump key value set unset
+root/ControlPanel/regedit/fields/filter/label=Show keys containing
+root/ControlPanel/regedit/fields/filter/type=text
+root/ControlPanel/regedit/fields/filter/key=root/regedit/filter
+root/ControlPanel/regedit/fields/filter/hint=Leave empty for everything
+root/ControlPanel/regedit/fields/dump/label=Browse
+root/ControlPanel/regedit/fields/dump/type=action
+root/ControlPanel/regedit/fields/dump/buttonText=Show matching keys
+root/ControlPanel/regedit/fields/dump/command=tpreg list 2>/dev/null | grep -i -- "$(tpreg get root/regedit/filter)" | head -300
+root/ControlPanel/regedit/fields/key/label=Key
+root/ControlPanel/regedit/fields/key/type=text
+root/ControlPanel/regedit/fields/key/key=root/regedit/key
+root/ControlPanel/regedit/fields/key/hint=root/something/else
+root/ControlPanel/regedit/fields/value/label=Value
+root/ControlPanel/regedit/fields/value/type=text
+root/ControlPanel/regedit/fields/value/key=root/regedit/value
+root/ControlPanel/regedit/fields/set/label=Set
+root/ControlPanel/regedit/fields/set/type=action
+root/ControlPanel/regedit/fields/set/buttonText=Write that value to that key
+root/ControlPanel/regedit/fields/set/command=tp-regedit set "$(tpreg get root/regedit/key)" "$(tpreg get root/regedit/value)"
+root/ControlPanel/regedit/fields/unset/label=Reset
+root/ControlPanel/regedit/fields/unset/type=action
+root/ControlPanel/regedit/fields/unset/buttonText=Put that key back to its shipped default
+root/ControlPanel/regedit/fields/unset/command=tp-regedit unset "$(tpreg get root/regedit/key)"
+root/ControlPanel/regedit/fields/unset/confirm=Discard the local value of this key?
+
+# --- Compatibility Check (ThinPro: hptc-compatibility, Advanced) -----------
+root/ControlPanel/compat/title=Compatibility Check
+root/ControlPanel/compat/fields=run explain
+root/ControlPanel/compat/fields/run/label=Check
+root/ControlPanel/compat/fields/run/type=action
+root/ControlPanel/compat/fields/run/buttonText=Check this hardware
+root/ControlPanel/compat/fields/run/command=tp-compat-check
+root/ControlPanel/compat/fields/run/timeout=120
+root/ControlPanel/compat/fields/explain/label=What is checked
+root/ControlPanel/compat/fields/explain/type=info
+root/ControlPanel/compat/fields/explain/valueCommand=echo "Memory, CPU, graphics, network, sound, storage and USB - the same checks the first-boot wizard runs."
+
+# --- Printers / Print Server (ThinPro: hptc-print-server, Hardware) --------
+root/printers/shareLocal=0
+root/printers/cupsBrowsing=1
+
+root/ControlPanel/printers/title=Printers
+root/ControlPanel/printers/fields=installed shareLocal cupsBrowsing remoteServer openCups available
+root/ControlPanel/printers/fields/installed/label=Printers on this client
+root/ControlPanel/printers/fields/installed/type=info
+root/ControlPanel/printers/fields/installed/valueCommand=lpstat -a 2>/dev/null | awk '{print $1}' | tr '\n' ' ' | sed 's/^$/none/'
+root/ControlPanel/printers/fields/shareLocal/label=Share this client's printers on the network
+root/ControlPanel/printers/fields/shareLocal/type=bool
+root/ControlPanel/printers/fields/shareLocal/key=root/printers/shareLocal
+root/ControlPanel/printers/fields/shareLocal/default=0
+root/ControlPanel/printers/fields/shareLocal/hint=Turns this client into a print server for a USB printer attached to it
+root/ControlPanel/printers/fields/cupsBrowsing/label=Find printers shared by others
+root/ControlPanel/printers/fields/cupsBrowsing/type=bool
+root/ControlPanel/printers/fields/cupsBrowsing/key=root/printers/cupsBrowsing
+root/ControlPanel/printers/fields/cupsBrowsing/default=1
+root/ControlPanel/printers/fields/remoteServer/label=Print server
+root/ControlPanel/printers/fields/remoteServer/type=text
+root/ControlPanel/printers/fields/remoteServer/key=root/printers/remoteServer
+root/ControlPanel/printers/fields/remoteServer/hint=Host running CUPS. Empty uses whatever is found on the network.
+root/ControlPanel/printers/fields/openCups/label=Full settings
+root/ControlPanel/printers/fields/openCups/type=action
+root/ControlPanel/printers/fields/openCups/buttonText=Open the CUPS pages in a browser
+root/ControlPanel/printers/fields/openCups/command=tp-open-url http://localhost:631/
+root/ControlPanel/printers/fields/available/label=Server
+root/ControlPanel/printers/fields/available/type=info
+root/ControlPanel/printers/fields/available/valueCommand=command -v cupsd >/dev/null 2>&1 && echo "cups is installed" || echo "cups is NOT in this image - add 'package cups' to build.conf"
+
+# --- Bluetooth (ThinPro: hptc-bluetooth, Hardware) -------------------------
+root/bluetooth/enabled=0
+
+root/ControlPanel/bluetooth/title=Bluetooth
+root/ControlPanel/bluetooth/fields=available enabled adapters scan
+root/ControlPanel/bluetooth/fields/available/label=Adapter
+root/ControlPanel/bluetooth/fields/available/type=info
+root/ControlPanel/bluetooth/fields/available/valueCommand=command -v bluetoothctl >/dev/null 2>&1 && echo "bluez is installed" || echo "bluez is NOT in this image - add 'package bluez' to build.conf"
+root/ControlPanel/bluetooth/fields/enabled/label=Turn Bluetooth on
+root/ControlPanel/bluetooth/fields/enabled/type=bool
+root/ControlPanel/bluetooth/fields/enabled/key=root/bluetooth/enabled
+root/ControlPanel/bluetooth/fields/enabled/default=0
+root/ControlPanel/bluetooth/fields/adapters/label=Adapters found
+root/ControlPanel/bluetooth/fields/adapters/type=info
+root/ControlPanel/bluetooth/fields/adapters/valueCommand=hciconfig 2>/dev/null | awk '/^hci/{printf "%s ", $1}' | sed 's/^$/none/'
+root/ControlPanel/bluetooth/fields/scan/label=Devices
+root/ControlPanel/bluetooth/fields/scan/type=action
+root/ControlPanel/bluetooth/fields/scan/buttonText=Look for nearby devices
+root/ControlPanel/bluetooth/fields/scan/command=timeout 15 bluetoothctl --timeout 12 scan on 2>&1 | grep -i 'device' | sort -u | head -30 || echo "bluetoothctl is not in this image"
+root/ControlPanel/bluetooth/fields/scan/timeout=40
+
+# --- Serial Manager (ThinPro: hptc-serial-mgr, Hardware) -------------------
+# Thin clients still sit in front of tills, scales and label printers, and a
+# session is no use to those unless the port is handed through to it.
+root/serial/device=
+root/serial/baud=9600
+root/serial/redirect=0
+
+root/ControlPanel/serial/title=Serial Manager
+root/ControlPanel/serial/fields=ports device baud redirect
+root/ControlPanel/serial/fields/ports/label=Ports found
+root/ControlPanel/serial/fields/ports/type=info
+root/ControlPanel/serial/fields/ports/valueCommand=ls -1 /dev/ttyS* /dev/ttyUSB* 2>/dev/null | tr '\n' ' ' | sed 's/^$/none/'
+root/ControlPanel/serial/fields/device/label=Port
+root/ControlPanel/serial/fields/device/type=choice
+root/ControlPanel/serial/fields/device/key=root/serial/device
+root/ControlPanel/serial/fields/device/choicesCommand=ls -1 /dev/ttyS* /dev/ttyUSB* 2>/dev/null
+root/ControlPanel/serial/fields/baud/label=Speed
+root/ControlPanel/serial/fields/baud/type=choice
+root/ControlPanel/serial/fields/baud/key=root/serial/baud
+root/ControlPanel/serial/fields/baud/choices=1200|2400|4800|9600|19200|38400|57600|115200
+root/ControlPanel/serial/fields/baud/default=9600
+root/ControlPanel/serial/fields/redirect/label=Hand this port to the remote session
+root/ControlPanel/serial/fields/redirect/type=bool
+root/ControlPanel/serial/fields/redirect/key=root/serial/redirect
+root/ControlPanel/serial/fields/redirect/default=0
+root/ControlPanel/serial/fields/redirect/hint=FreeRDP passes it as /serial:COM1,<port>
+
+# --- Wireless Statistics (ThinPro: hptc-wlsstat, Hardware) -----------------
+root/ControlPanel/wlsstat/title=Wireless Statistics
+root/ControlPanel/wlsstat/fields=interface link quality address refresh
+root/ControlPanel/wlsstat/fields/interface/label=Interface
+root/ControlPanel/wlsstat/fields/interface/type=info
+root/ControlPanel/wlsstat/fields/interface/valueCommand=for i in /sys/class/net/*/wireless; do basename "$(dirname "$i")"; done 2>/dev/null | tr '\n' ' ' | sed 's/^$/no wireless interface/'
+root/ControlPanel/wlsstat/fields/link/label=Connected to
+root/ControlPanel/wlsstat/fields/link/type=info
+root/ControlPanel/wlsstat/fields/link/valueCommand=iw dev 2>/dev/null | awk '/ssid/{print $2}' | head -1 || iwgetid -r 2>/dev/null || echo "not associated"
+root/ControlPanel/wlsstat/fields/quality/label=Signal
+root/ControlPanel/wlsstat/fields/quality/type=info
+root/ControlPanel/wlsstat/fields/quality/valueCommand=awk 'NR>2{printf "quality %s, level %s dBm", $3, $4; exit}' /proc/net/wireless 2>/dev/null | sed 's/^$/no signal data/'
+root/ControlPanel/wlsstat/fields/address/label=Address
+root/ControlPanel/wlsstat/fields/address/type=info
+root/ControlPanel/wlsstat/fields/address/valueCommand=ip -4 -o addr show scope global 2>/dev/null | awk '{printf "%s on %s ", $4, $2}' | sed 's/^$/none/'
+root/ControlPanel/wlsstat/fields/refresh/label=Detail
+root/ControlPanel/wlsstat/fields/refresh/type=action
+root/ControlPanel/wlsstat/fields/refresh/buttonText=Show the full radio state
+root/ControlPanel/wlsstat/fields/refresh/command=iw dev 2>/dev/null; echo; cat /proc/net/wireless 2>/dev/null
+
+# --- Certificates (ThinPro: hptc-cert-mgr, Security) -----------------------
+root/ControlPanel/certificates/title=Certificates
+root/ControlPanel/certificates/fields=installed source importCert explain
+root/ControlPanel/certificates/fields/installed/label=Locally added
+root/ControlPanel/certificates/fields/installed/type=info
+root/ControlPanel/certificates/fields/installed/valueCommand=ls -1 /var/lib/tp/certs 2>/dev/null | tr '\n' ' ' | sed 's/^$/none/'
+root/ControlPanel/certificates/fields/source/label=Certificate file
+root/ControlPanel/certificates/fields/source/type=choice
+root/ControlPanel/certificates/fields/source/key=root/certificates/source
+root/ControlPanel/certificates/fields/source/choicesCommand=find /media /mnt /run/media -maxdepth 3 -type f \( -name '*.crt' -o -name '*.pem' -o -name '*.cer' \) 2>/dev/null | head -30
+root/ControlPanel/certificates/fields/source/hint=Put the file on a USB stick and it appears here
+root/ControlPanel/certificates/fields/importCert/label=Import
+root/ControlPanel/certificates/fields/importCert/type=action
+root/ControlPanel/certificates/fields/importCert/buttonText=Trust this certificate
+root/ControlPanel/certificates/fields/importCert/command=tp-cert import "$(tpreg get root/certificates/source)"
+root/ControlPanel/certificates/fields/explain/label=Note
+root/ControlPanel/certificates/fields/explain/type=info
+root/ControlPanel/certificates/fields/explain/valueCommand=echo "A certificate trusted here is trusted by RDP, the browser and anything else that uses the system store. It is kept in the writable layer, so a factory reset removes it."
+
+# --- Firewall (ThinPro: hptc-firewalld-mgr, Security) ----------------------
+root/firewall/enabled=0
+root/firewall/allowSsh=0
+root/firewall/allowVnc=0
+root/firewall/extraPorts=
+
+root/ControlPanel/firewall/title=Firewall Manager
+root/ControlPanel/firewall/fields=available enabled allowSsh allowVnc extraPorts state
+root/ControlPanel/firewall/fields/available/label=Backend
+root/ControlPanel/firewall/fields/available/type=info
+root/ControlPanel/firewall/fields/available/valueCommand=if command -v nft >/dev/null 2>&1; then echo "nftables"; elif command -v iptables >/dev/null 2>&1; then echo "iptables"; else echo "no firewall tool in this image"; fi
+root/ControlPanel/firewall/fields/enabled/label=Block incoming connections
+root/ControlPanel/firewall/fields/enabled/type=bool
+root/ControlPanel/firewall/fields/enabled/key=root/firewall/enabled
+root/ControlPanel/firewall/fields/enabled/default=0
+root/ControlPanel/firewall/fields/enabled/hint=Outgoing connections are never blocked; a thin client has to reach its server
+root/ControlPanel/firewall/fields/allowSsh/label=Except ssh
+root/ControlPanel/firewall/fields/allowSsh/type=bool
+root/ControlPanel/firewall/fields/allowSsh/key=root/firewall/allowSsh
+root/ControlPanel/firewall/fields/allowSsh/default=0
+root/ControlPanel/firewall/fields/allowVnc/label=Except remote assistance
+root/ControlPanel/firewall/fields/allowVnc/type=bool
+root/ControlPanel/firewall/fields/allowVnc/key=root/firewall/allowVnc
+root/ControlPanel/firewall/fields/allowVnc/default=0
+root/ControlPanel/firewall/fields/extraPorts/label=Also allow
+root/ControlPanel/firewall/fields/extraPorts/type=text
+root/ControlPanel/firewall/fields/extraPorts/key=root/firewall/extraPorts
+root/ControlPanel/firewall/fields/extraPorts/hint=Space separated, e.g. '631/tcp 5353/udp'
+root/ControlPanel/firewall/fields/state/label=Rules now
+root/ControlPanel/firewall/fields/state/type=info
+root/ControlPanel/firewall/fields/state/valueCommand=nft list chain inet tp input 2>/dev/null | grep -c 'accept' | sed 's/^/rules: /' || echo "not configured"

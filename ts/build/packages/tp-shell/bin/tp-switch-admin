@@ -1,0 +1,55 @@
+#!/bin/sh
+# Enters or leaves administrator mode.
+#
+# The password is checked against the real account through sudo, not against
+# anything in the registry: a password kept in a settings file is not a
+# password. This is the same check the kiosk panel's button makes, kept in
+# one place so both agree.
+
+. /etc/thinstation.global 2>/dev/null
+
+USER_NAME="${USER:-user}"
+KEY="root/users/$USER_NAME/adminMode"
+
+case "$1" in
+leave)
+	tpreg set "$KEY" 0
+	echo "Back in user mode."
+	exit 0
+	;;
+enter)
+	;;
+*)
+	echo "usage: tp-switch-admin enter|leave" >&2
+	exit 2
+	;;
+esac
+
+if [ "`id -u`" = "0" ]; then
+	tpreg set "$KEY" 1
+	echo "Administrator mode."
+	exit 0
+fi
+
+# Already allowed to escalate without being asked? Then there is nothing to
+# prove and asking for a password would only be theatre.
+if sudo -n true 2>/dev/null; then
+	tpreg set "$KEY" 1
+	echo "Administrator mode."
+	exit 0
+fi
+
+printf 'Administrator password: ' >&2
+stty -echo 2>/dev/null
+read -r password
+stty echo 2>/dev/null
+printf '\n' >&2
+
+if printf '%s\n' "$password" | sudo -k -S -p '' true 2>/dev/null; then
+	tpreg set "$KEY" 1
+	echo "Administrator mode."
+	exit 0
+fi
+
+echo "That password was not accepted." >&2
+exit 1

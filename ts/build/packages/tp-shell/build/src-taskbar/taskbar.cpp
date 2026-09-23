@@ -11,6 +11,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QScreen>
+#include <QStyle>
 #include <QTimer>
 
 static const int kHeight = 34;

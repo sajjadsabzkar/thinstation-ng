@@ -11,6 +11,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QStackedWidget>
+#include <QStyle>
 #include <QVBoxLayout>
 
 static const int PageLanguage = 0;

@@ -14,5 +14,5 @@ QMAKE_LFLAGS_RELEASE   += -Wl,--as-needed -Wl,-O1
 REGISTRY = $$PWD/../../../tp-registry/build/src
 INCLUDEPATH += $$REGISTRY
 
-SOURCES += main.cpp $$REGISTRY/registry.cpp $$REGISTRY/tpstyle.cpp model.cpp mainwindow.cpp editdialog.cpp netwait.cpp
-HEADERS += $$REGISTRY/registry.h $$REGISTRY/tpstyle.h model.h mainwindow.h editdialog.h netwait.h
+SOURCES += main.cpp $$REGISTRY/registry.cpp $$REGISTRY/tpstyle.cpp model.cpp mainwindow.cpp editdialog.cpp netwait.cpp kioskpanel.cpp
+HEADERS += $$REGISTRY/registry.h $$REGISTRY/tpstyle.h model.h mainwindow.h editdialog.h netwait.h kioskpanel.h

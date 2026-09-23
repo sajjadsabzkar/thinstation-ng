@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QIcon>
 
+#include "kioskpanel.h"
 #include "mainwindow.h"
 #include "model.h"
 #include "registry.h"
@@ -47,7 +48,15 @@ int main(int argc, char *argv[])
     const bool kiosk = reg.boolValue(
         QLatin1String("root/users/") + user + QLatin1String("/kioskMode"), false);
 
-    MainWindow w(&reg, &model, kiosk);
+    // Two presentations of the same model, the way ThinPro's hptc-kiosk
+    // carries both MainWindow and KioskWindow.
+    if (kiosk) {
+        KioskPanel panel(&reg, &model);
+        panel.show();
+        return app.exec();
+    }
+
+    MainWindow w(&reg, &model, false);
     w.show();
 
     return app.exec();

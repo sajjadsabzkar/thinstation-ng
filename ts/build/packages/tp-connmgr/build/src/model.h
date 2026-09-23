@@ -36,8 +36,23 @@ struct ConnectionType {
     int     priority;
     QStringList fields;
 
+    // Whether the package behind this type is actually in the image.
+    //
+    // The registry describes every protocol we know about, but a build can
+    // leave one out -- ica and horizon are non-distributable and often are.
+    // Offering a type with no /etc/init.d/<package> behind it is worse than
+    // hiding it: pkg falls through to no_package, which prints "check your
+    // thinstation.conf file" and then sleeps forever, so the client looks
+    // hung rather than misconfigured.
+    bool available;
+
+    ConnectionType() : priority(50), available(false) {}
+
     bool isValid() const { return !id.isEmpty(); }
     QString node() const;
+
+    // Looks for the init script pkg would dispatch to.
+    static bool packageInstalled(const QString &package);
 };
 
 struct Connection {

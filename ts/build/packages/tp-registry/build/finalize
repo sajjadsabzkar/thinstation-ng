@@ -1,0 +1,2 @@
+#tp-registry 30
+systemctl enable tp-registry.init.service

@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# The lightweight half of the window manager pair. ThinPro keeps openbox in
+# its hptc-wm alternatives group at priority 50, below kwin_x11 at 60, for
+# exactly this reason: openbox needs X, glib and its own two libraries and
+# nothing else, where kwin brings the whole KDE stack.
+#
+#   openbox   5 packages,   3 MB installed
+#   kwin-x11  62 packages, 194 MB installed
+
+export PACKAGE="openbox"
+export PORTS="openbox"
+export DROP_FILES=""
+export DROP_DIRS="usr/share/doc usr/share/man"
+export CREATE_EMPTY_DIRS=""
+repackage -e
+
+returnval=$?
+
+exit $returnval

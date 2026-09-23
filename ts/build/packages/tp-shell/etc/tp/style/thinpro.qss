@@ -1,0 +1,365 @@
+/* The ThinPro look, taken from the real thing.
+ *
+ * Every value below is lifted from HP ThinPro 8.1's own
+ * /usr/share/hptc-control-panel/styles/default.qss, so that the connection
+ * manager, the control panel, the panels and the setup wizard read as one
+ * product rather than as four Qt dialogs.
+ *
+ *   #0096D6   HP blue: selection, primary buttons
+ *   #CCCCCC   header and footer bars
+ *   #676767   text on those bars
+ *   #333333   body text
+ *   #F8F8F8   panel background
+ *   #E8E8E8   hover
+ *   #F2F2F2   disabled fill
+ *
+ * ThinPro sets font-family "HP Simplified" at weight 25 (QFont::Light).
+ * That font is not redistributable, so the family list below falls through
+ * to what the image actually carries. Liberation Sans is metrically close
+ * enough that the layouts hold.
+ */
+
+* {
+    font-family: "HP Simplified", "Liberation Sans", "DejaVu Sans", sans-serif;
+}
+
+QWidget {
+    color: #333333;
+    background: #F8F8F8;
+}
+
+QWidget:disabled {
+    color: #ADADAD;
+}
+
+/* ---- headers and footers ------------------------------------------------ */
+
+QFrame#tpHeader {
+    background: #CCCCCC;
+    color: #676767;
+    min-height: 50px;
+    max-height: 50px;
+    margin: 0;
+}
+
+QFrame#tpHeader QLabel {
+    background: transparent;
+    color: #676767;
+    font-size: 18px;
+}
+
+QFrame#tpHeader QLabel#tpTitle {
+    font-size: 20px;
+}
+
+QFrame#tpFooter {
+    background: #CCCCCC;
+    padding: 5px;
+    padding-right: 20px;
+}
+
+/* The back arrow in ThinPro's ConfigListHeader. */
+QFrame#tpHeader QPushButton {
+    background: rgba(0, 0, 0, 0.1);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    font-size: 18px;
+    min-height: 32px;
+    min-width: 32px;
+}
+
+QFrame#tpHeader QPushButton:hover {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+QFrame#tpHeader QPushButton:pressed {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* The search field sits on the grey header with only an underline. */
+QLineEdit#tpSearch {
+    color: #333333;
+    background: transparent;
+    selection-background-color: #0096D6;
+    selection-color: white;
+    border: none;
+    border-bottom: 1px solid #333333;
+    font-size: 15px;
+    padding: 2px;
+}
+
+/* ---- buttons ------------------------------------------------------------ */
+
+/* Primary: flat HP blue, in the footer. */
+QFrame#tpFooter QAbstractButton,
+QPushButton[tpPrimary="true"] {
+    border: none;
+    font-size: 16px;
+    color: white;
+    background: #0096D6;
+    padding: 5px 15px 5px 15px;
+    border-radius: 3px;
+    min-height: 26px;
+}
+
+QFrame#tpFooter QAbstractButton:pressed,
+QPushButton[tpPrimary="true"]:pressed {
+    color: #CCCCCC;
+    background: #F2F2F2;
+}
+
+QFrame#tpFooter QAbstractButton:disabled,
+QPushButton[tpPrimary="true"]:disabled {
+    color: #CCCCCC;
+    background: #F2F2F2;
+}
+
+/* Secondary: outlined, the style ThinPro uses for launchModalButton. */
+QPushButton {
+    background: white;
+    color: #333333;
+    font-size: 16px;
+    padding: 6px 16px 6px 16px;
+    border: 2px solid #CCCCCC;
+    border-radius: 3px;
+    min-height: 24px;
+}
+
+QPushButton:hover {
+    background: #F2F2F2;
+}
+
+QPushButton:pressed {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+QPushButton:disabled {
+    color: #CCCCCC;
+    background: #F2F2F2;
+    border: 2px solid #F2F2F2;
+}
+
+QPushButton:default {
+    border: 2px solid #0096D6;
+    background: #0096D6;
+    color: white;
+}
+
+QPushButton:default:pressed {
+    border: 2px solid #F2F2F2;
+    background: #F2F2F2;
+    color: #CCCCCC;
+}
+
+/* ---- lists -------------------------------------------------------------- */
+
+QListWidget, QListView, QTreeWidget, QTableWidget {
+    background: white;
+    border: none;
+    font-size: 16px;
+}
+
+QListWidget::item, QListView::item {
+    height: 50px;
+    padding-right: 10px;
+    padding-left: 10px;
+}
+
+QListWidget::item:hover, QListView::item:hover {
+    background: #E8E8E8;
+}
+
+QListWidget::item:selected, QListView::item:selected {
+    background: #0096D6;
+    color: white;
+}
+
+/* The home page's category rows are taller and carry a 28px title. */
+QListWidget#tpCategories::item {
+    height: 84px;
+}
+
+QLabel#tpCategoryTitle {
+    font-size: 28px;
+    font-weight: 300;
+    background: transparent;
+}
+
+QLabel#tpCategoryItems {
+    font-size: 15px;
+    color: #676767;
+    background: transparent;
+}
+
+/* ---- form controls ------------------------------------------------------ */
+
+QLineEdit, QComboBox, QSpinBox {
+    background: white;
+    border: 2px solid #CCCCCC;
+    border-radius: 3px;
+    padding: 4px;
+    font-size: 15px;
+    min-height: 22px;
+    selection-background-color: #0096D6;
+    selection-color: white;
+}
+
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
+    border: 2px solid #0096D6;
+}
+
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {
+    background: #F2F2F2;
+    color: #ADADAD;
+    border: 2px solid #F2F2F2;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 22px;
+}
+
+QComboBox QAbstractItemView {
+    background: white;
+    border: 2px solid #E8E8E8;
+    selection-background-color: #0096D6;
+    selection-color: white;
+}
+
+QCheckBox, QRadioButton {
+    background: transparent;
+    font-size: 15px;
+    spacing: 8px;
+}
+
+QLabel {
+    background: transparent;
+    font-size: 15px;
+}
+
+QGroupBox {
+    border: 1px solid #CCCCCC;
+    border-radius: 3px;
+    margin-top: 14px;
+    padding-top: 8px;
+    font-size: 15px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px 0 4px;
+    color: #676767;
+}
+
+QSlider::groove:horizontal {
+    height: 4px;
+    background: #CCCCCC;
+    border-radius: 2px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #0096D6;
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    background: white;
+    border: 2px solid #0096D6;
+    width: 14px;
+    margin: -6px 0;
+    border-radius: 8px;
+}
+
+QTabWidget::pane {
+    border: none;
+    background: #F8F8F8;
+}
+
+QTabBar::tab {
+    background: #E8E8E8;
+    color: #333333;
+    padding: 8px 18px 8px 18px;
+    border: none;
+    font-size: 15px;
+}
+
+QTabBar::tab:selected {
+    background: #F8F8F8;
+    border-bottom: 3px solid #0096D6;
+}
+
+/* ---- taskbar ------------------------------------------------------------ */
+
+QWidget#tpTaskbar {
+    background: #CCCCCC;
+}
+
+QWidget#tpTaskbar QPushButton {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: #333333;
+    font-size: 14px;
+    padding: 4px 12px 4px 12px;
+    min-height: 26px;
+}
+
+QWidget#tpTaskbar QPushButton:hover {
+    background: #E8E8E8;
+}
+
+QWidget#tpTaskbar QPushButton:pressed,
+QWidget#tpTaskbar QPushButton:checked {
+    background: #0096D6;
+    color: white;
+}
+
+QWidget#tpTaskbar QLabel {
+    background: transparent;
+    color: #333333;
+    font-size: 14px;
+    padding-right: 10px;
+}
+
+QMenu {
+    background: white;
+    color: #333333;
+    font-size: 16px;
+    border: 2px solid #E8E8E8;
+}
+
+QMenu::item {
+    border: none;
+    padding: 8px 16px 8px 24px;
+}
+
+QMenu::item:selected {
+    background: #E8E8E8;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: #E8E8E8;
+    margin: 4px 0 4px 0;
+}
+
+/* ---- status ------------------------------------------------------------- */
+
+QLabel#tpStatusOk    { color: #2E7D32; }
+QLabel#tpStatusWarn  { color: #B26500; }
+QLabel#tpStatusFail  { color: #B00020; }
+
+QProgressBar {
+    border: none;
+    background: #E8E8E8;
+    height: 6px;
+    border-radius: 3px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background: #0096D6;
+    border-radius: 3px;
+}

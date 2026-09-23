@@ -107,11 +107,21 @@ void PanelIndex::scan(const QString &dir, const QString &visibleDir)
 
 // Categories come back in the order ThinPro shows them, with anything we did
 // not anticipate appended alphabetically rather than dropped.
+//
+// The order is not a guess. ThinPro's control panel carries it as a Qt
+// property in its own stylesheet:
+//
+//   HptcControlPanel--MainWindow {
+//       qproperty-categoriesOrder: "System,Security,Manageability,
+//                                   Input Devices,Hardware,Appearance";
+//   }
+//
+// Advanced is ours: ThinPro reaches those tools from elsewhere.
 QStringList PanelIndex::categories() const
 {
     static const char *order[] = {
-        "Appearance", "Hardware", "Input Devices", "Network",
-        "Security", "System", "Manageability", "Advanced", 0
+        "System", "Security", "Manageability",
+        "Input Devices", "Hardware", "Appearance", "Advanced", 0
     };
 
     QStringList present;

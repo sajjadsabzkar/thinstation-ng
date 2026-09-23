@@ -12,6 +12,7 @@
 
 #include "panelform.h"
 #include "registry.h"
+#include "tpstyle.h"
 
 static QString envOr(const char *name, const QString &fallback)
 {
@@ -23,6 +24,7 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setApplicationName(QLatin1String("tp-panel"));
+    TpStyle::apply(&app);
 
     const QStringList args = app.arguments();
     if (args.size() < 2) {
@@ -31,7 +33,7 @@ int main(int argc, char *argv[])
     }
 
     Registry reg(envOr("TP_DEFAULTS", QLatin1String("/etc/tp/registry.defaults")),
-                 envOr("TP_REGISTRY", QLatin1String("/etc/tp/registry.conf")));
+                 envOr("TP_REGISTRY", QLatin1String("/var/lib/tp/registry.conf")));
     if (!reg.load()) {
         QMessageBox::critical(0, QLatin1String("tp-panel"),
                               QObject::tr("Could not read the registry: %1")

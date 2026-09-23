@@ -6,7 +6,7 @@
 # Manticore registry but without a daemon. Two layers are merged on read:
 #
 #   $TP_DEFAULTS  shipped in the image, read-only     (/etc/tp/registry.defaults)
-#   $TP_REGISTRY  written at runtime, persistent      (/etc/tp/registry.conf)
+#   $TP_REGISTRY  written at runtime, persistent      (/var/lib/tp/registry.conf)
 #
 # A key present in the user layer wins. Deleting a key that only exists in
 # the defaults layer records a tombstone, otherwise the default would come
@@ -19,7 +19,7 @@
 #   root/users/<user>/<key>
 
 : ${TP_DEFAULTS:=/etc/tp/registry.defaults}
-: ${TP_REGISTRY:=/etc/tp/registry.conf}
+: ${TP_REGISTRY:=/var/lib/tp/registry.conf}
 
 TOMBSTONE=$'\001deleted'
 

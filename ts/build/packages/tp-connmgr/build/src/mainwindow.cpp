@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "netwait.h"
 #include "editdialog.h"
 #include "registry.h"
 
@@ -154,6 +155,29 @@ void MainWindow::onConnect()
     if (uuid.isEmpty())
         return;
 
+    const Connection conn = m_model->connection(uuid);
+    const ConnectionType type = m_model->type(conn.typeId);
+
+    // A type whose package is missing would reach pkg's no_package path,
+    // which prints a message and then sleeps forever. Say so instead.
+    if (!type.available) {
+        QMessageBox::critical(this, tr("Connection Manager"),
+            tr("%1 is not installed in this image.\n\n"
+               "This connection cannot start until the %2 package is built "
+               "into the image.").arg(type.label, type.package));
+        return;
+    }
+
+    // ThinPro shows "Waiting for networking..." before handing over to a
+    // session, and so do we, for connections that asked to wait.
+    if (m_model->fieldValue(conn, QLatin1String("waitForNetwork"))
+            != QLatin1String("0")) {
+        if (!NetWait::waitFor(this)) {
+            m_status->setText(tr("Cancelled: the network is not ready."));
+            return;
+        }
+    }
+
     // tp-launch resolves the connection out of the registry and hands it to
     // ThinStation's pkg dispatcher. Detached, so the chooser stays alive and
     // the session survives if the chooser is later closed.
@@ -164,15 +188,25 @@ void MainWindow::onConnect()
         return;
     }
 
-    m_status->setText(tr("Starting %1 ...").arg(m_model->connection(uuid).label));
+    m_status->setText(tr("Starting %1 ...").arg(conn.label));
 }
 
 void MainWindow::onAdd()
 {
-    const QVector<ConnectionType> types = m_model->types();
+    // Only offer what can actually start. The registry knows about every
+    // protocol; this image may not carry all of them.
+    QVector<ConnectionType> types;
+    const QVector<ConnectionType> all = m_model->types();
+    for (int i = 0; i < all.size(); ++i)
+        if (all.at(i).available)
+            types.append(all.at(i));
+
     if (types.isEmpty()) {
         QMessageBox::warning(this, tr("Connection Manager"),
-            tr("No connection types are available in this image."));
+            all.isEmpty()
+                ? tr("No connection types are defined.")
+                : tr("None of the connection types this client knows about "
+                     "are installed in this image."));
         return;
     }
 

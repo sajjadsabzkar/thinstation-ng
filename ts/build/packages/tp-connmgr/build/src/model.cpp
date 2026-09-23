@@ -1,6 +1,8 @@
 #include "model.h"
 #include "registry.h"
 
+#include <QFileInfo>
+
 #include <QtAlgorithms>
 
 QString ConnectionType::node() const
@@ -60,6 +62,20 @@ static bool connectionLessThan(const Connection &a, const Connection &b)
     return a.uuid < b.uuid;
 }
 
+// pkg dispatches everything it does not handle itself to
+// /etc/init.d/<package>, so the presence of that script is exactly the
+// question "can this connection actually start".
+bool ConnectionType::packageInstalled(const QString &package)
+{
+    if (package.isEmpty())
+        return false;
+
+    const QByteArray root = qgetenv("TP_INITDIR");
+    const QString dir = root.isEmpty() ? QLatin1String("/etc/init.d")
+                                       : QString::fromLocal8Bit(root);
+    return QFileInfo(dir + QLatin1Char('/') + package).exists();
+}
+
 Model::Model(Registry *reg) : m_reg(reg)
 {
 }
@@ -95,6 +111,7 @@ void Model::reload()
                                         QLatin1String("50")).toInt();
         t.fields         = m_reg->value(core + QLatin1String("fields"))
                                .split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        t.available      = ConnectionType::packageInstalled(t.package);
         m_types.append(t);
 
         const QStringList uuids = m_reg->children(

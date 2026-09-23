@@ -1,0 +1,9 @@
+# openbox is the lightweight half of the window manager pair, the same role
+# it plays on ThinPro, where it sits in the hptc-wm alternatives group at
+# priority 50 below kwin_x11 at 60.
+#
+# tp-session brings up the window manager the registry asks for, paints the
+# root window, starts the taskbar and the connection manager, and stays
+# alive as long as the window manager does.
+
+CMD_GLOBAL="tp-session"

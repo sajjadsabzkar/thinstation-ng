@@ -11,6 +11,7 @@
 #include "mainwindow.h"
 #include "model.h"
 #include "registry.h"
+#include "tpstyle.h"
 
 static QString envOr(const char *name, const QString &fallback)
 {
@@ -24,13 +25,14 @@ int main(int argc, char *argv[])
     app.setApplicationName(QLatin1String("tp-connmgr"));
     app.setApplicationDisplayName(QObject::tr("Connection Manager"));
     app.setWindowIcon(QIcon::fromTheme(QLatin1String("network-workgroup")));
+    TpStyle::apply(&app);
 
     // Same two paths the tpreg shell tool uses, overridable the same way so
     // the app can be run against a test registry without touching /etc.
     const QString defaults = envOr("TP_DEFAULTS",
                                    QLatin1String("/etc/tp/registry.defaults"));
     const QString userFile = envOr("TP_REGISTRY",
-                                   QLatin1String("/etc/tp/registry.conf"));
+                                   QLatin1String("/var/lib/tp/registry.conf"));
 
     Registry reg(defaults, userFile);
     if (!reg.load()) {

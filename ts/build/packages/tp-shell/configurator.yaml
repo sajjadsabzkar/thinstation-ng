@@ -1,0 +1,14 @@
+package:
+  name: "tp-shell"
+  category: "Desktop"
+  priority: 30
+  has-sessions: false
+  visible: true
+  dependencies:
+    - "base"
+    - "tp-registry"
+    - "qt5-min"
+    - "xorg7"
+    - "x-common"
+
+options: []

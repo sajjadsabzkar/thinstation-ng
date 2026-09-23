@@ -1,0 +1,126 @@
+#!/bin/bash
+# The desktop session: a window manager, a taskbar and the connection manager.
+#
+# ThinPro composes a session the same way -- a window manager from the
+# hptc-wm alternatives group, lxqt-panel for the taskbar, and hptc-kiosk as
+# the connection chooser -- rather than starting a desktop environment. Which
+# window manager comes up is a registry key here, standing in for the
+# alternatives link ThinPro keeps at /etc/alternatives/hptc-wm.
+#
+# Two things this script has to get right, both learned the hard way:
+#
+#   1. The session lives exactly as long as the window manager. Everything
+#      else is a background job, and the last line waits on the WM.
+#
+#   2. Closing the connection manager must not leave a bare root window with
+#      no way back. The taskbar is always there, and in kiosk mode the
+#      connection manager is respawned, because a kiosk with nothing on
+#      screen is a hung client as far as the user is concerned.
+
+. /etc/thinstation.global
+
+log() { logger -t tp-session "$*" 2>/dev/null || echo "tp-session: $*" >&2 ; }
+
+# --- which window manager ---------------------------------------------------
+# root/wm/name picks it; the priorities mirror ThinPro's alternatives group,
+# where kwin_x11 is 60 and openbox is 50. Whatever the registry says, fall
+# back to something that is actually installed rather than to a black screen.
+WM=`tpreg get root/wm/name 2>/dev/null`
+
+pick_wm() {
+	for candidate in "$@"; do
+		if which "$candidate" >/dev/null 2>&1; then
+			echo "$candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
+case "$WM" in
+kwin|kwin_x11)	WM_CMD=`pick_wm kwin_x11 openbox xfwm4` ;;
+openbox)	WM_CMD=`pick_wm openbox kwin_x11 xfwm4` ;;
+*)		WM_CMD=`pick_wm openbox kwin_x11 xfwm4` ;;
+esac
+
+if [ -z "$WM_CMD" ]; then
+	log "no window manager found, session cannot start"
+	exit 1
+fi
+log "window manager: $WM_CMD"
+
+case "$WM_CMD" in
+kwin_x11)
+	# Software rendering is the realistic case on the hardware this image
+	# targets, and kwin's OpenGL backend on llvmpipe is unusably slow.
+	KWIN_COMPOSE=N export KWIN_COMPOSE
+	QT_QUICK_BACKEND=software export QT_QUICK_BACKEND
+	$WM_CMD --replace &
+	;;
+*)
+	$WM_CMD &
+	;;
+esac
+wm_pid=$!
+
+# --- root window ------------------------------------------------------------
+# Nothing paints the root window without a desktop process, so it would stay
+# at the X default stipple. ThinPro's background is a flat colour by default.
+BG=`tpreg get root/desktop/background 2>/dev/null`
+[ -n "$BG" ] || BG="#2e3436"
+case "$BG" in
+\#*)	xsetroot -solid "$BG" 2>/dev/null ;;
+*)	if [ -r "$BG" ] && which feh >/dev/null 2>&1; then
+		feh --bg-scale "$BG" 2>/dev/null
+	else
+		xsetroot -solid "#2e3436" 2>/dev/null
+	fi
+	;;
+esac
+
+# --- first boot -------------------------------------------------------------
+# ThinPro shows its Initial Setup Wizard on a unit that has not been through
+# it yet, and records the fact so it does not come back. Run it in the
+# foreground: nothing else should start until language and networking have
+# been settled.
+if [ "`tpreg get root/setup/completed 2>/dev/null`" != "1" ] \
+   && which tp-wizard >/dev/null 2>&1; then
+	log "first boot, running the setup wizard"
+	tp-wizard
+fi
+
+# --- taskbar ----------------------------------------------------------------
+# Always present in standard configuration. It is the answer to closing the
+# connection manager and finding nothing underneath.
+if [ "`tpreg get root/product/config 2>/dev/null`" != "zero" ] \
+   && [ "`tpreg get root/desktop/showTaskbar 2>/dev/null`" != "0" ] \
+   && which tp-taskbar >/dev/null 2>&1; then
+	tp-taskbar &
+fi
+
+# --- connection manager -----------------------------------------------------
+# The same gate as ThinPro's 92hptc-kiosk hook: only auto-launch when the
+# user right says so.
+if [ "`tpreg get root/users/user/launchConnectionManager 2>/dev/null`" = "1" ] \
+   && which tp-connmgr >/dev/null 2>&1; then
+	if [ "`tpreg get root/product/config 2>/dev/null`" = "zero" ]; then
+		# Kiosk: the connection manager IS the session. If it dies,
+		# bring it back, but slowly enough that a crash loop does not
+		# saturate the machine.
+		(
+			while kill -0 $wm_pid 2>/dev/null; do
+				tp-connmgr
+				sleep 2
+			done
+		) &
+	else
+		tp-connmgr &
+	fi
+fi
+
+# --- autostart connections --------------------------------------------------
+if which tp-autostart >/dev/null 2>&1; then
+	tp-autostart &
+fi
+
+wait $wm_pid

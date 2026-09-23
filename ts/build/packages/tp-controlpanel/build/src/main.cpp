@@ -14,6 +14,7 @@
 #include "cpwindow.h"
 #include "panelentry.h"
 #include "registry.h"
+#include "tpstyle.h"
 
 static QString envOr(const char *name, const QString &fallback)
 {
@@ -26,6 +27,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName(QLatin1String("tp-controlpanel"));
     app.setWindowIcon(QIcon::fromTheme(QLatin1String("preferences-system")));
+    TpStyle::apply(&app);
 
     const QString appsDir = envOr("TP_CP_APPS",
                                   QLatin1String("/etc/tp/control-panel/applications"));
@@ -33,7 +35,7 @@ int main(int argc, char *argv[])
                                    QLatin1String("/etc/tp/control-panel/users"));
 
     Registry reg(envOr("TP_DEFAULTS", QLatin1String("/etc/tp/registry.defaults")),
-                 envOr("TP_REGISTRY", QLatin1String("/etc/tp/registry.conf")));
+                 envOr("TP_REGISTRY", QLatin1String("/var/lib/tp/registry.conf")));
     reg.load();
 
     const QString user = envOr("USER", QLatin1String("user"));

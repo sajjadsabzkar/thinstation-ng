@@ -1,0 +1,17 @@
+# The window manager contract: init.d/session-setup looks for a .wm marker in
+# /etc/cmd and then calls wm_menu and wm_workspaces out of this file.
+#
+# Neither does anything here. openbox builds its own root menu from
+# /etc/xdg/openbox/menu.xml, which tp-session regenerates from the same
+# .desktop files the control panel reads, so there is no separate menu for
+# ThinStation to populate. Workspaces are configured in rc.xml.
+
+wm_menu()
+{
+	echo unused > /dev/null
+}
+
+wm_workspaces()
+{
+	echo unused > /dev/null
+}

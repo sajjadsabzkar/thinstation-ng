@@ -1,0 +1,58 @@
+#!/bin/bash
+# Prepares the writable half of the registry.
+#
+# The defaults live in /etc/tp/registry.defaults, which is part of the image
+# and stays root-owned and read-only. Everything anyone changes goes to
+# $TP_REGISTRY, and that file is written with a temporary file beside it
+# followed by a rename, so the *directory* has to be writable by whoever is
+# running the session -- not just the file.
+#
+# This is where ThinPro has mdaemon: there, every write goes through a root
+# daemon and lands in /writable/registry.xml. We have no daemon, so the
+# session user owns its own registry directory instead.
+
+. /etc/init.d/common
+
+TP_DIR=/var/lib/tp
+TP_FILE=$TP_DIR/registry.conf
+
+case "$1" in
+start)
+	mkdir -p $TP_DIR
+
+	# Whoever the session runs as has to be able to create the temporary
+	# file. tsuser is the ThinStation convention; fall back to the first
+	# real account if the build renamed it.
+	owner=${TS_USER:-tsuser}
+	if ! id "$owner" >/dev/null 2>&1; then
+		owner=`awk -F: '$3 >= 1000 && $3 < 65534 { print $1; exit }' /etc/passwd`
+	fi
+
+	if [ -n "$owner" ]; then
+		chown "$owner" $TP_DIR 2>/dev/null
+	fi
+	chmod 0755 $TP_DIR
+
+	# Start the user layer empty rather than absent, so that a first save
+	# is an ordinary rewrite instead of a create.
+	if [ ! -e $TP_FILE ]; then
+		: > $TP_FILE
+		[ -n "$owner" ] && chown "$owner" $TP_FILE 2>/dev/null
+		chmod 0644 $TP_FILE
+	fi
+
+	# A volatile namespace, the way ThinPro uses tmp/ in Manticore: state
+	# that describes right now and must not survive a reboot. The network
+	# watcher writes tmp/network/status here.
+	mkdir -p $TP_DIR/tmp
+	[ -n "$owner" ] && chown "$owner" $TP_DIR/tmp 2>/dev/null
+	;;
+stop)
+	;;
+*)
+	echo "usage: $0 {start|stop}"
+	exit 1
+	;;
+esac
+
+exit 0

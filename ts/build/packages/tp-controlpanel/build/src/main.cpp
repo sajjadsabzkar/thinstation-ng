@@ -58,7 +58,19 @@ int main(int argc, char *argv[])
                               : usersDir + QLatin1Char('/') + user
                                 + QLatin1String("/applications"));
 
-    CpWindow w(index, admin);
+    CpWindow w(index, &reg, admin);
+
+    // ThinPro's control panel takes --config-panel to open straight at one
+    // setting. Ours takes that and --category, which is what the kiosk
+    // sidebar and the taskbar want when they send someone to a group of
+    // settings rather than to one.
+    const int categoryAt = args.indexOf(QLatin1String("--category"));
+    const int panelAt = args.indexOf(QLatin1String("--config-panel"));
+    if (panelAt >= 0 && panelAt + 1 < args.size())
+        w.openPanel(args.at(panelAt + 1));
+    else if (categoryAt >= 0 && categoryAt + 1 < args.size())
+        w.openCategory(args.at(categoryAt + 1));
+
     w.show();
 
     return app.exec();

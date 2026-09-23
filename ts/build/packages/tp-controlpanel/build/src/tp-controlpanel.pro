@@ -11,7 +11,13 @@ QMAKE_CXXFLAGS_RELEASE += -Os
 QMAKE_LFLAGS_RELEASE   += -Wl,--as-needed -Wl,-O1
 
 REGISTRY = $$PWD/../../../tp-registry/build/src
-INCLUDEPATH += $$REGISTRY
+PANEL    = $$PWD/../src-panel
+INCLUDEPATH += $$REGISTRY $$PANEL
 
-SOURCES += main.cpp $$REGISTRY/registry.cpp $$REGISTRY/tpstyle.cpp panelentry.cpp cpwindow.cpp
-HEADERS += $$REGISTRY/registry.h $$REGISTRY/tpstyle.h panelentry.h cpwindow.h
+# The form renderer is shared with tp-panel. ThinPro's control panel hosts
+# each setting inside its own window rather than launching one, so the window
+# needs the same widget the standalone program draws.
+SOURCES += main.cpp $$REGISTRY/registry.cpp $$REGISTRY/tpstyle.cpp \
+           $$PANEL/panelform.cpp panelentry.cpp cpwindow.cpp
+HEADERS += $$REGISTRY/registry.h $$REGISTRY/tpstyle.h \
+           $$PANEL/panelform.h panelentry.h cpwindow.h

@@ -74,18 +74,33 @@ class PanelForm : public QDialog
     Q_OBJECT
 
 public:
-    PanelForm(Registry *reg, const QString &panelId, QWidget *parent = 0);
+    // Embedded mode drops the OK/Cancel/Apply row and leaves the widget
+    // otherwise identical. ThinPro's control panel is one window that hosts
+    // each panel inside itself with a single Apply in the footer, so the
+    // same form has to work both ways: inside that window, and on its own
+    // when tp-panel is run for one setting from the kiosk sidebar.
+    PanelForm(Registry *reg, const QString &panelId, QWidget *parent = 0,
+              bool embedded = false);
 
     bool isValid() const { return !m_fields.isEmpty(); }
     QString errorString() const { return m_error; }
+
+    // For the host window's footer button.
+    bool isDirty() const { return m_dirty; }
+    bool applyChanges() { return commit(); }
+
+signals:
+    void dirtyChanged(bool dirty);
 
 private slots:
     void onOk();
     void onApply();
     void onAction();
+    void markDirty();
 
 private:
     void        loadSpec();
+    void        watchForChanges(QWidget *w);
     QWidget    *buildWidget(const PanelField &f, const QString &value);
     QString     readWidget(const PanelField &f, QWidget *w) const;
     QString     currentValue(const PanelField &f) const;
@@ -104,6 +119,8 @@ private:
     QVector<PanelField>      m_fields;
     QMap<QString, QWidget *> m_widgets;
     QDialogButtonBox        *m_buttons;
+    bool                     m_embedded;
+    bool                     m_dirty;
 };
 
 #endif

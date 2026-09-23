@@ -23,9 +23,17 @@ static bool truthy(const QString &v)
         || s == QLatin1String("true") || s == QLatin1String("yes");
 }
 
-PanelForm::PanelForm(Registry *reg, const QString &panelId, QWidget *parent)
-    : QDialog(parent), m_reg(reg), m_panelId(panelId), m_buttons(0)
+PanelForm::PanelForm(Registry *reg, const QString &panelId, QWidget *parent,
+                     bool embedded)
+    : QDialog(parent), m_reg(reg), m_panelId(panelId), m_buttons(0),
+      m_embedded(embedded), m_dirty(false)
 {
+    if (m_embedded) {
+        // A QDialog put in a layout draws as an ordinary widget. Saying so
+        // explicitly keeps it from ever being treated as a window.
+        setWindowFlags(Qt::Widget);
+        setSizeGripEnabled(false);
+    }
     loadSpec();
     if (m_fields.isEmpty()) {
         m_error = tr("No panel named '%1' is defined in the registry.").arg(panelId);
@@ -51,6 +59,7 @@ PanelForm::PanelForm(Registry *reg, const QString &panelId, QWidget *parent)
             const PanelField &f = m_fields.at(i);
             QWidget *w = buildWidget(f, currentValue(f));
             m_widgets.insert(f.name, w);
+            watchForChanges(w);
             // A checkbox and a button already say what they are; a label in
             // the left column beside them would only repeat the text.
             if (f.type == QLatin1String("bool")
@@ -72,6 +81,7 @@ PanelForm::PanelForm(Registry *reg, const QString &panelId, QWidget *parent)
                     continue;
                 QWidget *w = buildWidget(f, currentValue(f));
                 m_widgets.insert(f.name, w);
+                watchForChanges(w);
                 if (f.type == QLatin1String("bool")
                     || f.type == QLatin1String("action"))
                     form->addRow(QString(), w);
@@ -83,18 +93,24 @@ PanelForm::PanelForm(Registry *reg, const QString &panelId, QWidget *parent)
         outer->addWidget(tabs);
     }
 
-    m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok
-                                   | QDialogButtonBox::Cancel
-                                   | QDialogButtonBox::Apply,
-                                     Qt::Horizontal, this);
-    outer->addWidget(m_buttons);
+    // Embedded, the host window owns the Apply button and there is nothing
+    // to cancel back to, so the row is left off entirely.
+    if (!m_embedded) {
+        m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok
+                                       | QDialogButtonBox::Cancel
+                                       | QDialogButtonBox::Apply,
+                                         Qt::Horizontal, this);
+        outer->addWidget(m_buttons);
 
-    connect(m_buttons, SIGNAL(accepted()), this, SLOT(onOk()));
-    connect(m_buttons, SIGNAL(rejected()), this, SLOT(reject()));
-    connect(m_buttons->button(QDialogButtonBox::Apply), SIGNAL(clicked()),
-            this, SLOT(onApply()));
+        connect(m_buttons, SIGNAL(accepted()), this, SLOT(onOk()));
+        connect(m_buttons, SIGNAL(rejected()), this, SLOT(reject()));
+        connect(m_buttons->button(QDialogButtonBox::Apply), SIGNAL(clicked()),
+                this, SLOT(onApply()));
 
-    resize(440, sizeHint().height());
+        resize(440, sizeHint().height());
+    } else {
+        outer->addStretch(1);
+    }
 }
 
 QStringList PanelForm::runCommand(const QString &command, bool *ok)
@@ -264,6 +280,32 @@ QWidget *PanelForm::buildWidget(const PanelField &f, const QString &value)
     return le;
 }
 
+// Wires whatever the widget's "the user changed me" signal happens to be to
+// markDirty, so the host window can grey its Apply button until there is
+// something to apply. Done in one place rather than in every branch of
+// buildWidget, which would be five more lines each and easy to forget.
+void PanelForm::watchForChanges(QWidget *w)
+{
+    if (QCheckBox *cb = qobject_cast<QCheckBox *>(w))
+        connect(cb, SIGNAL(toggled(bool)), this, SLOT(markDirty()));
+    else if (QComboBox *cb = qobject_cast<QComboBox *>(w))
+        connect(cb, SIGNAL(currentTextChanged(QString)), this, SLOT(markDirty()));
+    else if (QSpinBox *sb = qobject_cast<QSpinBox *>(w))
+        connect(sb, SIGNAL(valueChanged(int)), this, SLOT(markDirty()));
+    else if (QLineEdit *le = qobject_cast<QLineEdit *>(w))
+        connect(le, SIGNAL(textChanged(QString)), this, SLOT(markDirty()));
+    else if (QSlider *sl = w->findChild<QSlider *>())
+        connect(sl, SIGNAL(valueChanged(int)), this, SLOT(markDirty()));
+}
+
+void PanelForm::markDirty()
+{
+    if (m_dirty)
+        return;
+    m_dirty = true;
+    emit dirtyChanged(true);
+}
+
 QString PanelForm::readWidget(const PanelField &f, QWidget *w) const
 {
     if (f.type == QLatin1String("bool")) {
@@ -330,6 +372,9 @@ bool PanelForm::commit()
                                   .arg(m_reg->lastError()));
         return false;
     }
+
+    m_dirty = false;
+    emit dirtyChanged(false);
 
     QString hookError;
     if (!runApplyHook(&hookError)) {

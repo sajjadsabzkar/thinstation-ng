@@ -592,3 +592,93 @@ QLabel#tpCategoryIcon {
     color: #0F6FA8;
     font-size: 26px;
 }
+
+/* ---- the control panel's category view ---------------------------------- */
+
+/* Read off the running product: the control panel is one window, not a
+ * launcher. A category shows its panels down a white sidebar with the
+ * selected one as a solid blue band, and that panel's form fills the rest. */
+
+QPushButton#tpBackButton {
+    background: #BFBFBF;
+    border: none;
+    border-radius: 4px;
+    color: #4A4A4A;
+    font-size: 26px;
+    min-width: 54px;
+    min-height: 42px;
+    padding-bottom: 4px;
+}
+
+QPushButton#tpBackButton:hover {
+    background: #B0B0B0;
+}
+
+/* The category name doubles as a way to move between categories. Drawn flat
+ * on the grey header rather than as a boxed combo. */
+QPushButton#tpCategoryPicker {
+    background: transparent;
+    border: none;
+    color: #4A4A4A;
+    font-size: 26px;
+    padding: 0px 8px;
+    text-align: left;
+}
+
+QPushButton#tpCategoryPicker:hover {
+    color: #1A1A1A;
+}
+
+/* Qt draws its own arrow on a button that has a menu. The caret is already
+ * in the text, so hide it. */
+QPushButton#tpCategoryPicker::menu-indicator {
+    image: none;
+    width: 0px;
+}
+
+QPushButton#tpCategoryPicker QMenu {
+    background: #FFFFFF;
+    border: 1px solid #BFBFBF;
+    font-size: 17px;
+}
+
+QListWidget#tpPanelList {
+    background: #FFFFFF;
+    border: none;
+    border-right: 1px solid #DDDDDD;
+    outline: none;
+}
+
+QListWidget#tpPanelList::item {
+    color: #333333;
+    font-size: 17px;
+    padding-left: 18px;
+    padding-right: 12px;
+    border: none;
+}
+
+QListWidget#tpPanelList::item:hover {
+    background: #EFEFEF;
+}
+
+/* The selected row is a full-bleed HP blue band with white text - the one
+ * strong colour anywhere in the window. */
+QListWidget#tpPanelList::item:selected {
+    background: #0096D6;
+    color: #FFFFFF;
+}
+
+/* The pane beside it is a warm off-white, not the panel grey. */
+QStackedWidget#tpPanelStack {
+    background: #F7F4F1;
+}
+
+QStackedWidget#tpPanelStack QWidget {
+    background: #F7F4F1;
+}
+
+QStackedWidget#tpPanelStack QLineEdit,
+QStackedWidget#tpPanelStack QComboBox,
+QStackedWidget#tpPanelStack QSpinBox {
+    background: #FFFFFF;
+}

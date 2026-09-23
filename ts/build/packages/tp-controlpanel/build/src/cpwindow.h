@@ -22,6 +22,7 @@
 
 #include "panelentry.h"
 
+class QGridLayout;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -36,9 +37,15 @@ class CpWindow : public QMainWindow
 public:
     CpWindow(const PanelIndex &index, bool adminMode, QWidget *parent = 0);
 
+protected:
+    // The category tiles are plain frames, so their clicks arrive here
+    // rather than through a signal. A QPushButton would have been less
+    // code, but a button does not take its size from the layout inside it
+    // and the tiles came out as one squashed line.
+    bool eventFilter(QObject *watched, QEvent *event);
+
 private slots:
     void onSearchChanged(const QString &text);
-    void onCategoryActivated(QListWidgetItem *item);
     void onPanelActivated(QListWidgetItem *item);
     void onHome();
 
@@ -53,7 +60,7 @@ private:
 
     // A category row: the title plus the panels it holds, which is what
     // makes ThinPro's home page readable without icons.
-    void addCategoryRow(const QString &category);
+    void addCategoryTile(const QString &category, int row, int column);
     void addPanelRow(QListWidget *list, const PanelEntry &entry);
 
     PanelIndex      m_index;
@@ -61,7 +68,7 @@ private:
 
     QStackedWidget *m_pages;
     QLineEdit      *m_search;
-    QListWidget    *m_categories;   // home page
+    QGridLayout    *m_categories;   // home page: two columns of category tiles
     QListWidget    *m_panels;       // category page and search results
     QLabel         *m_listTitle;
     QLabel         *m_homeTitle;

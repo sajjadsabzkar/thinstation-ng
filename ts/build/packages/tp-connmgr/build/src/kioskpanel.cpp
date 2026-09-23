@@ -1,46 +1,38 @@
 #include "kioskpanel.h"
 #include "netwait.h"
 #include "registry.h"
+#include "tpstyle.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
-#include <QFrame>
-#include <QHBoxLayout>
+#include <QDateTime>
 #include <QInputDialog>
 #include <QLabel>
-#include <QListWidget>
+#include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
 #include <QScreen>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWidgetAction>
 
 #include <unistd.h>
 
-static const int kWidth = 320;
-
-static bool runOk(const QString &command, int timeoutMs = 5000)
-{
-    QProcess p;
-    p.start(QLatin1String("/bin/sh"),
-            QStringList() << QLatin1String("-c") << command);
-    if (!p.waitForFinished(timeoutMs)) {
-        p.kill();
-        p.waitForFinished(500);
-        return false;
-    }
-    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
-}
+// 60px is what ThinPro gives the strip. Wide enough for a glyph and a
+// hh:mm above a date, narrow enough that nobody resents it.
+static const int kWidth = 60;
 
 KioskPanel::KioskPanel(Registry *reg, Model *model, QWidget *parent)
-    : QWidget(parent), m_reg(reg), m_model(model), m_admin(false)
+    : QWidget(parent), m_reg(reg), m_model(model), m_admin(false),
+      m_menu(0), m_toolsMenu(0), m_powerMenu(0), m_modeAction(0),
+      m_connectionsSeparator(0)
 {
     setWindowTitle(tr("Connection Manager"));
     setObjectName(QLatin1String("tpKioskPanel"));
 
-    // A dock down the right edge: no decorations, above the session, and
-    // out of the window list so nothing can raise itself over it.
     setWindowFlags(Qt::FramelessWindowHint
                  | Qt::WindowStaysOnTopHint
                  | Qt::Tool);
@@ -50,57 +42,41 @@ KioskPanel::KioskPanel(Registry *reg, Model *model, QWidget *parent)
     v->setContentsMargins(0, 0, 0, 0);
     v->setSpacing(0);
 
-    // --- heading ---------------------------------------------------------
-    QFrame *header = new QFrame(this);
-    header->setObjectName(QLatin1String("tpHeader"));
-    QHBoxLayout *hl = new QHBoxLayout(header);
-    hl->setContentsMargins(16, 0, 16, 0);
+    static const char *menuGlyphs[] = { "\xe2\x98\xb0", "\xe2\x89\xa1", "=", 0 };
+    m_menuButton = new QPushButton(TpStyle::glyph(font(), menuGlyphs), this);
+    m_menuButton->setObjectName(QLatin1String("tpKioskMenuButton"));
+    m_menuButton->setToolTip(tr("Menu"));
+    v->addWidget(m_menuButton);
 
-    m_heading = new QLabel(tr("Connections"), header);
-    m_heading->setObjectName(QLatin1String("tpTitle"));
-    hl->addWidget(m_heading);
-    hl->addStretch(1);
-    v->addWidget(header);
+    // Everything between the hamburger and the tray is empty space in
+    // ThinPro. Leaving it empty is the design, not an oversight.
+    v->addStretch(1);
 
-    // --- connections -----------------------------------------------------
-    m_list = new QListWidget(this);
-    v->addWidget(m_list, 1);
+    // The tray glyphs, each with fallbacks: the speaker pictograph is in
+    // neither font this image ships, and an empty box in a system tray is
+    // worse than a plainer symbol.
+    static const char *networkGlyphs[]  = { "\xe2\x87\xb5", "\xe2\x87\x84", "N", 0 };
+    static const char *volumeGlyphs[]   = { "\xf0\x9f\x94\x8a", "\xe2\x99\xaa", "V", 0 };
+    static const char *keyboardGlyphs[] = { "\xe2\x8c\xa8", "\xe2\x8c\xa7", "K", 0 };
+    static const char *displayGlyphs[]  = { "\xe2\x96\xa3", "\xe2\x96\xa1", "D", 0 };
 
-    m_status = new QLabel(this);
-    m_status->setWordWrap(true);
-    m_status->setContentsMargins(16, 6, 16, 6);
-    v->addWidget(m_status);
+    struct { const char *const *glyphs; const char *tip; const char *slot; } tray[] = {
+        { networkGlyphs,  "Network",  SLOT(onNetwork())  },
+        { volumeGlyphs,   "Volume",   SLOT(onVolume())   },
+        { keyboardGlyphs, "Keyboard", SLOT(onKeyboard()) },
+        { displayGlyphs,  "Display",  SLOT(onDisplay())  }
+    };
+    for (int i = 0; i < 4; ++i) {
+        QPushButton *b = new QPushButton(TpStyle::glyph(font(), tray[i].glyphs), this);
+        b->setObjectName(QLatin1String("tpTrayButton"));
+        b->setToolTip(tr(tray[i].tip));
+        connect(b, SIGNAL(clicked()), this, tray[i].slot);
+        v->addWidget(b);
+    }
 
-    // --- actions ---------------------------------------------------------
-    QWidget *actions = new QWidget(this);
-    QVBoxLayout *al = new QVBoxLayout(actions);
-    al->setContentsMargins(12, 8, 12, 12);
-    al->setSpacing(6);
-
-    m_connectBtn  = new QPushButton(tr("Connect"), actions);
-    m_connectBtn->setProperty("tpPrimary", true);
-    m_adminBtn    = new QPushButton(tr("Administrator Mode"), actions);
-    m_settingsBtn = new QPushButton(tr("Settings"), actions);
-    m_volumeBtn   = new QPushButton(tr("Volume"), actions);
-    m_infoBtn     = new QPushButton(tr("Information"), actions);
-    m_powerBtn    = new QPushButton(tr("Shut Down"), actions);
-
-    al->addWidget(m_connectBtn);
-    al->addWidget(m_adminBtn);
-    al->addWidget(m_settingsBtn);
-    al->addWidget(m_volumeBtn);
-    al->addWidget(m_infoBtn);
-    al->addWidget(m_powerBtn);
-    v->addWidget(actions);
-
-    connect(m_connectBtn,  SIGNAL(clicked()), this, SLOT(onConnect()));
-    connect(m_adminBtn,    SIGNAL(clicked()), this, SLOT(onAdminMode()));
-    connect(m_settingsBtn, SIGNAL(clicked()), this, SLOT(onSettings()));
-    connect(m_volumeBtn,   SIGNAL(clicked()), this, SLOT(onVolume()));
-    connect(m_infoBtn,     SIGNAL(clicked()), this, SLOT(onInformation()));
-    connect(m_powerBtn,    SIGNAL(clicked()), this, SLOT(onShutDown()));
-    connect(m_list, SIGNAL(itemActivated(QListWidgetItem*)),
-            this, SLOT(onItemActivated(QListWidgetItem*)));
+    m_clock = new QLabel(this);
+    m_clock->setObjectName(QLatin1String("tpKioskClock"));
+    v->addWidget(m_clock);
 
     const QString user = QString::fromLocal8Bit(qgetenv("USER"));
     m_admin = (geteuid() == 0)
@@ -108,15 +84,15 @@ KioskPanel::KioskPanel(Registry *reg, Model *model, QWidget *parent)
                              + (user.isEmpty() ? QLatin1String("user") : user)
                              + QLatin1String("/adminMode"));
 
-    applyAdminState();
-    refresh();
-    placeOnRightEdge();
+    buildMenu();
+    connect(m_menuButton, SIGNAL(clicked()), this, SLOT(onMenuButton()));
 
-    // Connections can be created by the autostart path or by an admin in
-    // another window; keep the list honest without anyone asking.
-    QTimer *poll = new QTimer(this);
-    connect(poll, SIGNAL(timeout()), this, SLOT(refresh()));
-    poll->start(10000);
+    QTimer *timer = new QTimer(this);
+    connect(timer, SIGNAL(timeout()), this, SLOT(onTick()));
+    timer->start(20000);
+    onTick();
+
+    placeOnRightEdge();
 }
 
 void KioskPanel::placeOnRightEdge()
@@ -127,118 +103,180 @@ void KioskPanel::placeOnRightEdge()
     else
         screen = QRect(0, 0, 1024, 768);
 
-    // Leave room for a taskbar if one is running: it is a dock too, and two
-    // docks claiming the same pixels look broken.
-    int bottom = screen.bottom() + 1;
-    if (m_reg->value(QLatin1String("root/desktop/showTaskbar")) != QLatin1String("0"))
-        bottom -= 34;
-
     setGeometry(screen.right() - kWidth + 1, screen.top(),
-                kWidth, bottom - screen.top());
+                kWidth, screen.height());
+    setFixedWidth(kWidth);
 }
 
-void KioskPanel::applyAdminState()
+void KioskPanel::buildMenu()
 {
-    // In user mode the panel is a launcher and nothing else. Settings is
-    // still visible, but it asks for the administrator password first --
-    // hiding it entirely only makes a locked client look broken.
-    m_adminBtn->setText(m_admin ? tr("Leave Administrator Mode")
-                                : tr("Administrator Mode"));
-    m_heading->setText(m_admin ? tr("Connections - Administrator")
-                               : tr("Connections"));
+    m_menu = new QMenu(this);
+    m_menu->setObjectName(QLatin1String("tpKioskMenu"));
+
+    m_menu->addAction(tr("Create a Connection"), this, SLOT(onCreateConnection()));
+    m_menu->addAction(tr("Edit Connection Settings"), this, SLOT(onEditConnections()));
+
+    // The connections themselves go between here and the separator, and are
+    // rebuilt every time the menu opens.
+    m_connectionsSeparator = m_menu->addSeparator();
+
+    m_modeAction = m_menu->addAction(QString(), this, SLOT(onSwitchMode()));
+    m_menu->addAction(tr("System Information"), this, SLOT(onSystemInformation()));
+    m_menu->addAction(tr("Control Panel"), this, SLOT(onControlPanel()));
+
+    m_toolsMenu = m_menu->addMenu(tr("Tools"));
+    m_toolsMenu->setObjectName(QLatin1String("tpKioskMenu"));
+
+    // The same eight entries ThinPro puts under Tools, in its order.
+    struct { const char *label; const char *command; bool adminOnly; } tools[] = {
+        { "X Terminal",           "tp-xterm",               true  },
+        { "Wireless Statistics",  "tp-panel wlsstat",       false },
+        { "Text Editor",          "tp-texteditor",          true  },
+        { "Task Manager",         "tp-panel taskmgr",       false },
+        { "Snipping Tool",        "tp-snip",                false },
+        { "Registry Editor",      "tp-panel regedit",       true  },
+        { "Initial Setup Wizard", "tp-wizard --rerun",      true  },
+        { "Compatibility Check",  "tp-panel compat",        false }
+    };
+    for (int i = 0; i < 8; ++i) {
+        QAction *a = m_toolsMenu->addAction(tr(tools[i].label));
+        const QString command = QLatin1String(tools[i].command);
+        const bool adminOnly = tools[i].adminOnly;
+        connect(a, &QAction::triggered, this, [this, command, adminOnly]() {
+            if (adminOnly && !requireAdmin())
+                return;
+            launch(command);
+        });
+    }
+
+    m_powerMenu = m_menu->addMenu(tr("Power"));
+    m_powerMenu->setObjectName(QLatin1String("tpKioskMenu"));
+
+    QAction *shutdown = m_powerMenu->addAction(tr("Shut Down"));
+    connect(shutdown, &QAction::triggered, [this]() {
+        if (QMessageBox::question(this, tr("Shut Down"),
+                tr("Shut this client down?")) == QMessageBox::Yes)
+            launch(QLatin1String("systemctl poweroff || poweroff"));
+    });
+
+    QAction *restart = m_powerMenu->addAction(tr("Restart"));
+    connect(restart, &QAction::triggered, [this]() {
+        if (QMessageBox::question(this, tr("Restart"),
+                tr("Restart this client?")) == QMessageBox::Yes)
+            launch(QLatin1String("systemctl reboot || reboot"));
+    });
+
+    // The search box is a widget pinned to the bottom of the menu, the way
+    // ThinPro does it. Typing filters the actions above it.
+    QLineEdit *search = new QLineEdit(m_menu);
+    search->setObjectName(QLatin1String("tpMenuSearch"));
+    search->setPlaceholderText(tr("Search"));
+    QWidgetAction *searchAction = new QWidgetAction(m_menu);
+    searchAction->setDefaultWidget(search);
+    m_menu->addAction(searchAction);
+
+    connect(search, &QLineEdit::textChanged, this, [this](const QString &text) {
+        const QList<QAction *> actions = m_menu->actions();
+        for (int i = 0; i < actions.size(); ++i) {
+            QAction *a = actions.at(i);
+            if (a->isSeparator() || qobject_cast<QWidgetAction *>(a))
+                continue;
+            a->setVisible(text.isEmpty()
+                          || a->text().contains(text, Qt::CaseInsensitive));
+        }
+    });
+
+    m_modeAction->setText(m_admin ? tr("Switch to User")
+                                  : tr("Switch to Administrator"));
 }
 
-void KioskPanel::closeEvent(QCloseEvent *event)
+void KioskPanel::rebuildConnectionActions()
 {
-    // The whole point of a kiosk is that there is nothing behind this panel.
-    // Only the session gets to end it, by killing the process.
-    event->ignore();
-}
+    // Drop what was there last time: connections can appear and disappear
+    // while the panel is up. A connection action is the only kind carrying a
+    // uuid in data(), which is a surer test than counting positions.
+    const QList<QAction *> existing = m_menu->actions();
+    for (int i = 0; i < existing.size(); ++i) {
+        QAction *a = existing.at(i);
+        if (a == m_connectionsSeparator)
+            break;
+        if (a->data().toString().isEmpty())
+            continue;
+        m_menu->removeAction(a);
+        delete a;
+    }
 
-void KioskPanel::refresh()
-{
-    const QString previous = selectedUuid();
-
-    m_list->clear();
     m_model->reload();
-
     const QVector<Connection> conns = m_model->connections();
     for (int i = 0; i < conns.size(); ++i) {
         const ConnectionType type = m_model->type(conns.at(i).typeId);
 
-        QListWidgetItem *item = new QListWidgetItem(conns.at(i).label, m_list);
-        item->setData(Qt::UserRole, conns.at(i).uuid);
-        item->setToolTip(type.label);
-
-        // A connection whose package is missing would hang on pkg's
-        // no_package path. Show it, greyed, rather than hiding the fact.
+        QAction *a = new QAction(conns.at(i).label, m_menu);
+        a->setData(conns.at(i).uuid);
         if (!type.available) {
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            item->setText(tr("%1  (%2 not installed)")
-                              .arg(conns.at(i).label, type.label));
+            // Shown, but not startable: a connection whose package is
+            // missing would hit pkg's no_package path and sleep forever.
+            a->setEnabled(false);
+            a->setText(tr("%1  (%2 not installed)")
+                           .arg(conns.at(i).label, type.label));
         }
-
-        if (conns.at(i).uuid == previous)
-            m_list->setCurrentItem(item);
+        connect(a, SIGNAL(triggered()), this, SLOT(onConnectUuid()));
+        m_menu->insertAction(m_connectionsSeparator, a);
     }
-
-    if (m_list->count() == 0) {
-        m_status->setText(m_admin
-            ? tr("No connections. Open Settings to create one.")
-            : tr("No connections have been set up on this client."));
-    } else {
-        if (!m_list->currentItem())
-            m_list->setCurrentRow(0);
-        m_status->clear();
-    }
-
-    m_connectBtn->setEnabled(m_list->count() > 0);
 }
 
-QString KioskPanel::selectedUuid() const
+void KioskPanel::onMenuButton()
 {
-    const QListWidgetItem *item = m_list->currentItem();
-    return item ? item->data(Qt::UserRole).toString() : QString();
+    rebuildConnectionActions();
+    m_modeAction->setText(m_admin ? tr("Switch to User")
+                                  : tr("Switch to Administrator"));
+
+    // Open to the left of the strip, aligned with the button.
+    const QSize hint = m_menu->sizeHint();
+    QPoint origin = m_menuButton->mapToGlobal(QPoint(0, 0));
+    m_menu->popup(QPoint(origin.x() - hint.width(), origin.y()));
 }
 
-void KioskPanel::onItemActivated(QListWidgetItem *item)
+void KioskPanel::onTick()
 {
-    if (item && (item->flags() & Qt::ItemIsEnabled))
-        onConnect();
+    const bool ampm = m_reg->value(QLatin1String("root/time/clockFormat"))
+                      != QLatin1String("24h");
+    const QDateTime now = QDateTime::currentDateTime();
+    m_clock->setText(now.toString(ampm ? QLatin1String("h:mm AP")
+                                       : QLatin1String("HH:mm"))
+                     + QLatin1Char('\n')
+                     + now.toString(QLatin1String("M/d/yyyy")));
 }
 
-void KioskPanel::onConnect()
+void KioskPanel::onConnectUuid()
 {
-    const QString uuid = selectedUuid();
+    QAction *a = qobject_cast<QAction *>(sender());
+    if (!a)
+        return;
+    const QString uuid = a->data().toString();
     if (uuid.isEmpty())
         return;
 
     const Connection conn = m_model->connection(uuid);
-    const ConnectionType type = m_model->type(conn.typeId);
-
-    if (!type.available) {
-        m_status->setText(tr("%1 is not installed in this image.")
-                              .arg(type.label));
-        return;
-    }
 
     if (m_model->fieldValue(conn, QLatin1String("waitForNetwork"))
             != QLatin1String("0")) {
-        if (!NetWait::waitFor(this)) {
-            m_status->setText(tr("Cancelled: the network is not ready."));
+        if (!NetWait::waitFor(this))
             return;
-        }
     }
 
-    if (!QProcess::startDetached(QLatin1String("tp-launch"),
-                                 QStringList() << uuid)) {
-        m_status->setText(tr("Could not start the connection."));
-        return;
-    }
-    m_status->setText(tr("Starting %1 ...").arg(conn.label));
+    QProcess::startDetached(QLatin1String("tp-launch"), QStringList() << uuid);
 }
 
-void KioskPanel::onAdminMode()
+bool KioskPanel::requireAdmin()
+{
+    if (m_admin)
+        return true;
+    onSwitchMode();
+    return m_admin;
+}
+
+void KioskPanel::onSwitchMode()
 {
     const QString user = QString::fromLocal8Bit(qgetenv("USER"));
     const QString key = QLatin1String("root/users/")
@@ -249,27 +287,25 @@ void KioskPanel::onAdminMode()
         m_admin = false;
         m_reg->setValue(key, QLatin1String("0"));
         m_reg->save();
-        applyAdminState();
-        m_status->setText(tr("Back in user mode."));
+        m_modeAction->setText(tr("Switch to Administrator"));
         return;
     }
 
     bool ok = false;
     const QString password = QInputDialog::getText(this,
-        tr("Administrator Mode"),
+        tr("Switch to Administrator"),
         tr("Administrator password:"), QLineEdit::Password, QString(), &ok);
     if (!ok)
         return;
 
     // Checked against the real account, not against anything in the
     // registry: a password stored in a settings file is not a password.
-    // su reads the password on stdin only with a tty, so ask sudo instead,
-    // which is how the settings panels already escalate.
     QProcess p;
     p.start(QLatin1String("/bin/sh"), QStringList() << QLatin1String("-c")
             << QLatin1String("sudo -k -S -p '' true"));
     if (!p.waitForStarted(3000)) {
-        m_status->setText(tr("Could not verify the password."));
+        QMessageBox::warning(this, tr("Switch to Administrator"),
+                             tr("Could not verify the password."));
         return;
     }
     p.write(password.toLocal8Bit() + "\n");
@@ -277,7 +313,7 @@ void KioskPanel::onAdminMode()
     p.waitForFinished(8000);
 
     if (p.exitCode() != 0) {
-        QMessageBox::warning(this, tr("Administrator Mode"),
+        QMessageBox::warning(this, tr("Switch to Administrator"),
                              tr("That password was not accepted."));
         return;
     }
@@ -285,41 +321,45 @@ void KioskPanel::onAdminMode()
     m_admin = true;
     m_reg->setValue(key, QLatin1String("1"));
     m_reg->save();
-    applyAdminState();
-    refresh();
-    m_status->setText(tr("Administrator mode. Settings are unlocked."));
+    m_modeAction->setText(tr("Switch to User"));
 }
 
-void KioskPanel::onSettings()
+void KioskPanel::onCreateConnection()
 {
-    if (!m_admin) {
-        m_status->setText(tr("Enter administrator mode to change settings."));
-        onAdminMode();
-        if (!m_admin)
-            return;
-    }
-    QProcess::startDetached(QLatin1String("tp-controlpanel"),
-                            QStringList() << QLatin1String("--admin"));
-}
-
-void KioskPanel::onVolume()
-{
-    QProcess::startDetached(QLatin1String("tp-panel"),
-                            QStringList() << QLatin1String("sound"));
-}
-
-void KioskPanel::onInformation()
-{
-    QProcess::startDetached(QLatin1String("tp-panel"),
-                            QStringList() << QLatin1String("sysinfo"));
-}
-
-void KioskPanel::onShutDown()
-{
-    if (QMessageBox::question(this, tr("Shut Down"),
-            tr("Shut this client down?")) != QMessageBox::Yes)
+    if (!requireAdmin())
         return;
+    launch(QLatin1String("tp-connmgr --new"));
+}
 
-    if (!runOk(QLatin1String("systemctl poweroff")))
-        runOk(QLatin1String("poweroff"));
+void KioskPanel::onEditConnections()
+{
+    if (!requireAdmin())
+        return;
+    launch(QLatin1String("tp-connmgr"));
+}
+
+void KioskPanel::onSystemInformation() { launch(QLatin1String("tp-panel sysinfo")); }
+void KioskPanel::onControlPanel()
+{
+    if (!requireAdmin())
+        return;
+    launch(QLatin1String("tp-controlpanel"));
+}
+
+void KioskPanel::onNetwork()  { launch(QLatin1String("tp-panel network")); }
+void KioskPanel::onVolume()   { launch(QLatin1String("tp-panel sound")); }
+void KioskPanel::onKeyboard() { launch(QLatin1String("tp-panel keyboard")); }
+void KioskPanel::onDisplay()  { launch(QLatin1String("tp-panel display")); }
+
+void KioskPanel::launch(const QString &command)
+{
+    QProcess::startDetached(QLatin1String("/bin/sh"),
+                            QStringList() << QLatin1String("-c") << command);
+}
+
+void KioskPanel::closeEvent(QCloseEvent *event)
+{
+    // The whole point of a kiosk is that there is nothing behind this panel.
+    // Only the session gets to end it, by killing the process.
+    event->ignore();
 }

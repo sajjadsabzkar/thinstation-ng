@@ -1,20 +1,35 @@
 // The kiosk sidebar -- ThinPro's KioskWindow.
 //
-// In Smart Zero the connection manager is not a window you open, it is a
-// panel down the right edge of the screen that is always there. Its binary
-// carries both classes, MainWindow and KioskWindow, and the strings that
-// belong to this one: "Show all connections", "Settings", "Volume",
-// "Information", "Shut Down".
+// Redrawn from screenshots of the real product. The first version of this
+// file was a 320px drawer with six buttons down it, which is not what ThinPro
+// does at all. In Smart Zero the sidebar is a 60px strip pinned to the right
+// edge, and it holds almost nothing:
 //
-// What it has to do:
+//   * a hamburger at the top, which opens the menu
+//   * a column of tray glyphs at the bottom: network, volume, keyboard,
+//     display
+//   * the time above the date, in small blue text, at the very bottom
 //
-//   * list the connections and start one on a click
-//   * let an administrator in, which is the only way to reach the settings
-//     from a locked-down client
-//   * leave no way out that a user should not have -- no close button, no
-//     Alt-F4, nothing behind it but the session
+// Everything else lives in the menu that hamburger opens:
 //
-// The registry keys are ThinPro's own:
+//   Create a Connection
+//   Edit Connection Settings
+//   New <type> Connection
+//   ----
+//   Switch to User / Switch to Administrator
+//   System Information
+//   Control Panel
+//   Tools        >  X Terminal, Wireless Statistics, Text Editor,
+//                   Task Manager, Snipping Tool, Registry Editor,
+//                   Initial Setup Wizard, Compatibility Check
+//   Power        >  Shut Down, Restart, Log Off
+//   [ Search                                    ]
+//
+// The strip is deliberately thin because in Smart Zero it is the whole
+// shell: there is no taskbar and no desktop behind it, and every pixel it
+// takes is a pixel the session does not get.
+//
+// Registry keys, ThinPro's own:
 //
 //   root/users/<user>/kioskMode         this panel instead of the window
 //   root/users/<user>/hideDesktopPanel  hide it until a hot corner is hit
@@ -29,8 +44,7 @@
 
 class Registry;
 class QLabel;
-class QListWidget;
-class QListWidgetItem;
+class QMenu;
 class QPushButton;
 
 class KioskPanel : public QWidget
@@ -46,33 +60,37 @@ protected:
     void closeEvent(QCloseEvent *event);
 
 private slots:
-    void refresh();
-    void onConnect();
-    void onItemActivated(QListWidgetItem *item);
-    void onSettings();
-    void onAdminMode();
-    void onInformation();
-    void onShutDown();
+    void onMenuButton();
+    void onTick();
+    void onConnectUuid();
+    void onCreateConnection();
+    void onEditConnections();
+    void onSwitchMode();
+    void onSystemInformation();
+    void onControlPanel();
+    void onNetwork();
     void onVolume();
+    void onKeyboard();
+    void onDisplay();
 
 private:
     void placeOnRightEdge();
-    void applyAdminState();
-    QString selectedUuid() const;
+    void buildMenu();
+    void rebuildConnectionActions();
+    bool requireAdmin();
+    static void launch(const QString &command);
 
     Registry    *m_reg;
     Model       *m_model;
     bool         m_admin;
 
-    QLabel      *m_heading;
-    QListWidget *m_list;
-    QLabel      *m_status;
-    QPushButton *m_connectBtn;
-    QPushButton *m_adminBtn;
-    QPushButton *m_settingsBtn;
-    QPushButton *m_volumeBtn;
-    QPushButton *m_infoBtn;
-    QPushButton *m_powerBtn;
+    QPushButton *m_menuButton;
+    QMenu       *m_menu;
+    QMenu       *m_toolsMenu;
+    QMenu       *m_powerMenu;
+    QAction     *m_modeAction;
+    QAction     *m_connectionsSeparator;
+    QLabel      *m_clock;
 };
 
 #endif

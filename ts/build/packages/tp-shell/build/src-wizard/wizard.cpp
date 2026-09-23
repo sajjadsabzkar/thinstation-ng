@@ -3,8 +3,10 @@
 
 #include <QApplication>
 #include <QComboBox>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -14,37 +16,49 @@
 #include <QStyle>
 #include <QVBoxLayout>
 
-static const int PageLanguage = 0;
-static const int PageNetwork  = 1;
-static const int PageCheck    = 2;
-static const int PageCount    = 3;
+// The pages, in order. The cover and the done page are full width; the four
+// between them are split.
+enum {
+    PageCover = 0,
+    PageKeyboard,
+    PageNetwork,
+    PageDateTime,
+    PageCheck,
+    PageDone,
+    PageCount
+};
 
-// The languages the image can actually present. ThinPro carries a much
-// longer list; ours is bounded by the locale package in the build, so
-// offering more would be a promise the image cannot keep.
-struct Language {
+// The four split pages are the ones the step pill counts.
+static const int kSplitPages = 4;
+
+static const struct {
     const char *code;
     const char *name;
     const char *keyboard;
-};
-static const Language kLanguages[] = {
-    { "en_US.UTF-8", "English (United States)", "us" },
-    { "en_GB.UTF-8", "English (United Kingdom)", "gb" },
-    { "de_DE.UTF-8", "Deutsch",                 "de" },
-    { "fr_FR.UTF-8", "Fran\xc3\xa7" "ais",      "fr" },
-    { "es_ES.UTF-8", "Espa\xc3\xb1ol",          "es" },
-    { "it_IT.UTF-8", "Italiano",                "it" },
-    { "pt_BR.UTF-8", "Portugu\xc3\xaas (Brasil)", "br" },
+} kLanguages[] = {
+    { "en_US.UTF-8", "English", "us" },
+    { "fr_FR.UTF-8", "Fran\xc3\xa7" "ais", "fr" },
+    { "de_DE.UTF-8", "Deutsch", "de" },
+    { "es_ES.UTF-8", "Espa\xc3\xb1ol", "es" },
     { "ru_RU.UTF-8", "\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9", "ru" },
+    { "ja_JP.UTF-8", "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e", "jp" },
+    { "ko_KR.UTF-8", "\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4", "kr" },
+    { "zh_CN.UTF-8", "\xe7\xae\x80\xe4\xbd\x93\xe4\xb8\xad\xe6\x96\x87", "cn" },
     { "fa_IR.UTF-8", "\xd9\x81\xd8\xa7\xd8\xb1\xd8\xb3\xdb\x8c", "ir" },
     { "tr_TR.UTF-8", "T\xc3\xbcrk\xc3\xa7" "e", "tr" },
     { "ar_SA.UTF-8", "\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9", "ara" },
-    { "zh_CN.UTF-8", "\xe4\xb8\xad\xe6\x96\x87 (\xe7\xae\x80\xe4\xbd\x93)", "cn" },
+    { "it_IT.UTF-8", "Italiano", "it" },
     { 0, 0, 0 }
 };
 
+// Every split page says the same thing under its headline. That repetition
+// is ThinPro's, and it is the point: nothing here is a decision anyone has
+// to get right first time.
+static const char *kReassurance =
+    QT_TRANSLATE_NOOP("Wizard", "You can customize it later, don't worry.");
+
 Wizard::Wizard(Registry *reg, QWidget *parent)
-    : QWidget(parent), m_reg(reg), m_check(0), m_checkDone(false)
+    : QWidget(parent), m_reg(reg), m_language(0), m_check(0), m_checkDone(false)
 {
     setWindowTitle(tr("Initial Setup"));
 
@@ -52,182 +66,462 @@ Wizard::Wizard(Registry *reg, QWidget *parent)
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(0);
 
-    // --- header ---------------------------------------------------------
-    QFrame *header = new QFrame(this);
-    header->setObjectName(QLatin1String("tpHeader"));
-    QHBoxLayout *hl = new QHBoxLayout(header);
-    hl->setContentsMargins(20, 0, 20, 0);
-
-    m_title = new QLabel(header);
-    m_title->setObjectName(QLatin1String("tpTitle"));
-    m_step = new QLabel(header);
-
-    hl->addWidget(m_title);
-    hl->addStretch(1);
-    hl->addWidget(m_step);
-    outer->addWidget(header);
-
-    // --- pages ----------------------------------------------------------
     m_pages = new QStackedWidget(this);
-    m_pages->addWidget(buildLanguagePage());
-    m_pages->addWidget(buildNetworkPage());
-    m_pages->addWidget(buildCheckPage());
+
+    m_pages->addWidget(buildCoverPage());
+
+    QPushButton *back, *next;
+    m_pages->addWidget(buildSplitPage(
+        tr("Select the standard keyboard format:"), buildKeyboardBody(),
+        tr("Keyboard"), tr("Select the default keyboard layout"),
+        QString::fromUtf8("\xe2\x8c\xa8"), &back, &next));
+    m_backButtons.append(back); m_nextButtons.append(next);
+
+    m_pages->addWidget(buildSplitPage(
+        tr("Select a network connection:"), buildNetworkBody(),
+        tr("Network"), tr("Select the default network"),
+        QString::fromUtf8("\xf0\x9f\x93\xa1"), &back, &next));
+    m_backButtons.append(back); m_nextButtons.append(next);
+
+    m_pages->addWidget(buildSplitPage(
+        tr("Select the appropriate timezone:"), buildDateTimeBody(),
+        tr("Date & Time"), tr("Set the system date and time"),
+        QString::fromUtf8("\xf0\x9f\x95\x92"), &back, &next));
+    m_backButtons.append(back); m_nextButtons.append(next);
+
+    m_pages->addWidget(buildSplitPage(
+        tr("Check this hardware:"), buildCheckBody(),
+        tr("Hardware"), tr("See what this client can do"),
+        QString::fromUtf8("\xe2\x9a\x99"), &back, &next));
+    m_backButtons.append(back); m_nextButtons.append(next);
+
+    m_pages->addWidget(buildDonePage());
+
     outer->addWidget(m_pages, 1);
 
-    // --- footer ---------------------------------------------------------
-    QFrame *footer = new QFrame(this);
-    footer->setObjectName(QLatin1String("tpFooter"));
-    QHBoxLayout *fl = new QHBoxLayout(footer);
-    fl->setContentsMargins(20, 6, 20, 6);
-
-    m_back = new QPushButton(tr("Back"), footer);
-    m_next = new QPushButton(tr("Next"), footer);
-    m_next->setDefault(true);
-
-    fl->addStretch(1);
-    fl->addWidget(m_back);
-    fl->addWidget(m_next);
-    outer->addWidget(footer);
-
-    connect(m_back, SIGNAL(clicked()), this, SLOT(onBack()));
-    connect(m_next, SIGNAL(clicked()), this, SLOT(onNext()));
-
-    showPage(PageLanguage);
-    resize(720, 480);
+    selectLanguage(0);
+    showPage(PageCover);
+    resize(1024, 700);
 }
 
-QWidget *Wizard::buildLanguagePage()
+// ---------------------------------------------------------------------------
+// The cover page
+// ---------------------------------------------------------------------------
+
+QWidget *Wizard::buildCoverPage()
 {
     QWidget *page = new QWidget(this);
+    page->setObjectName(QLatin1String("tpWizardCover"));
+
     QVBoxLayout *v = new QVBoxLayout(page);
-    v->setContentsMargins(40, 30, 40, 30);
+    v->setContentsMargins(0, 40, 0, 40);
+    v->setSpacing(0);
 
-    QLabel *intro = new QLabel(
-        tr("Choose the language and keyboard layout for this client."), page);
-    intro->setWordWrap(true);
-    v->addWidget(intro);
-    v->addSpacing(16);
+    QLabel *brand = new QLabel(tr("ThinPro NG"), page);
+    brand->setAlignment(Qt::AlignCenter);
+    brand->setStyleSheet(QLatin1String(
+        "color: #0096D6; font-size: 56px; font-weight: 300;"));
+    v->addWidget(brand);
+    v->addSpacing(30);
 
-    QFormLayout *form = new QFormLayout;
-    form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
-    form->setHorizontalSpacing(20);
-    form->setVerticalSpacing(14);
+    // ThinPro puts a photograph of a client on a desk here. We have no such
+    // artwork to ship, and a stretched placeholder photograph would look
+    // worse than none, so the band is a flat field carrying the strapline.
+    QLabel *hero = new QLabel(tr("Thin client"), page);
+    hero->setAlignment(Qt::AlignCenter);
+    hero->setMinimumHeight(190);
+    hero->setStyleSheet(QLatin1String(
+        "background: #4C5680; color: #C6CBDF; font-size: 22px;"));
+    v->addWidget(hero, 1);
+    v->addSpacing(34);
 
-    m_language = new QComboBox(page);
-    for (int i = 0; kLanguages[i].code; ++i)
-        m_language->addItem(QString::fromUtf8(kLanguages[i].name),
-                            QString::fromLatin1(kLanguages[i].code));
+    // Six to a row rather than one long line. ThinPro fits ten across
+    // because its screenshot is a 2171px panel; on the 1024x768 this OS is
+    // built for, a single row pushes the window wider than the screen and
+    // the last few names fall off the edge.
+    QGridLayout *langs = new QGridLayout;
+    langs->setContentsMargins(40, 0, 40, 0);
+    langs->setHorizontalSpacing(24);
+    langs->setVerticalSpacing(10);
 
-    m_keyboard = new QComboBox(page);
-    m_keyboard->setEditable(true);
+    const QFontMetrics metrics(page->font());
+    int shown = 0;
     for (int i = 0; kLanguages[i].code; ++i) {
-        const QString kb = QString::fromLatin1(kLanguages[i].keyboard);
-        if (m_keyboard->findText(kb) < 0)
-            m_keyboard->addItem(kb);
+        const QString name = QString::fromUtf8(kLanguages[i].name);
+
+        // Only offer a language this image can actually draw. The build
+        // drops the CJK and Arabic font packages to keep the image small,
+        // and a row of empty boxes is a worse answer than a shorter list:
+        // nobody can pick a language whose name they cannot read.
+        bool renderable = true;
+        for (int c = 0; c < name.size(); ++c) {
+            const QChar ch = name.at(c);
+            if (ch.isSpace() || ch.isPunct())
+                continue;
+            if (!metrics.inFont(ch)) {
+                renderable = false;
+                break;
+            }
+        }
+        if (!renderable && i != 0)
+            continue;
+
+        QPushButton *b = new QPushButton(name, page);
+        b->setObjectName(QLatin1String("tpLanguageChoice"));
+        b->setFlat(true);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setProperty("tpIndex", i);
+        connect(b, SIGNAL(clicked()), this, SLOT(onLanguageClicked()));
+        m_languageButtons.append(b);
+        langs->addWidget(b, shown / 6, shown % 6, Qt::AlignCenter);
+        ++shown;
     }
+    v->addLayout(langs);
+    v->addSpacing(30);
 
-    m_timezone = new QComboBox(page);
-    m_timezone->setEditable(true);
-    const QString zones = HwCheck::runCommand(QLatin1String(
-        "find /usr/share/zoneinfo/posix -type f 2>/dev/null "
-        "| sed 's|/usr/share/zoneinfo/posix/||' | sort"), 8000);
-    if (!zones.isEmpty())
-        m_timezone->addItems(zones.split(QLatin1Char('\n'), Qt::SkipEmptyParts));
-    else
-        m_timezone->addItem(QLatin1String("UTC"));
+    QPushButton *go = new QPushButton(tr("Continue Setup"), page);
+    go->setProperty("tpPrimary", true);
+    go->setMinimumSize(420, 56);
+    connect(go, SIGNAL(clicked()), this, SLOT(onNext()));
 
-    // The keyboard follows the language unless the user says otherwise.
-    connect(m_language, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(onRefreshNetwork()));   // reused: just refreshes state
-
-    form->addRow(tr("Language:"), m_language);
-    form->addRow(tr("Keyboard:"), m_keyboard);
-    form->addRow(tr("Time zone:"), m_timezone);
-    v->addLayout(form);
-    v->addStretch(1);
+    QHBoxLayout *gl = new QHBoxLayout;
+    gl->addStretch(1);
+    gl->addWidget(go);
+    gl->addStretch(1);
+    v->addLayout(gl);
 
     return page;
 }
 
-QWidget *Wizard::buildNetworkPage()
+void Wizard::onLanguageClicked()
+{
+    QObject *s = sender();
+    if (s)
+        selectLanguage(s->property("tpIndex").toInt());
+}
+
+void Wizard::selectLanguage(int index)
+{
+    m_language = index;
+    for (int i = 0; i < m_languageButtons.size(); ++i) {
+        QPushButton *b = m_languageButtons.at(i);
+        b->setProperty("tpSelected", i == index);
+        b->style()->unpolish(b);
+        b->style()->polish(b);
+    }
+
+    // The keyboard follows the language until someone changes it by hand.
+    if (m_keyboard && index >= 0 && kLanguages[index].code) {
+        const int kb = m_keyboard->findText(
+            QString::fromLatin1(kLanguages[index].keyboard));
+        if (kb >= 0)
+            m_keyboard->setCurrentIndex(kb);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The split pages
+// ---------------------------------------------------------------------------
+
+QFrame *Wizard::buildStepBar(int stepIndex, const QString &stepName)
+{
+    QFrame *bar = new QFrame(this);
+    bar->setObjectName(QLatin1String("tpWizardSteps"));
+
+    QHBoxLayout *h = new QHBoxLayout(bar);
+    h->setContentsMargins(24, 0, 24, 0);
+    h->setSpacing(14);
+    h->addStretch(1);
+
+    // Filled dots for the steps already behind, the current step spelled
+    // out, hollow dots for what is still to come.
+    for (int i = 0; i < stepIndex; ++i) {
+        QLabel *dot = new QLabel(QString::fromUtf8("\xe2\x97\x8f"), bar);
+        dot->setObjectName(QLatin1String("tpWizardStepDot"));
+        h->addWidget(dot);
+    }
+
+    QLabel *name = new QLabel(stepName, bar);
+    name->setObjectName(QLatin1String("tpWizardStepName"));
+    h->addWidget(name);
+
+    for (int i = stepIndex + 1; i < kSplitPages; ++i) {
+        QLabel *dot = new QLabel(QString::fromUtf8("\xe2\x97\x8b"), bar);
+        dot->setObjectName(QLatin1String("tpWizardStepDot"));
+        h->addWidget(dot);
+    }
+
+    h->addStretch(1);
+    return bar;
+}
+
+QWidget *Wizard::buildSplitPage(const QString &question,
+                                QWidget *body,
+                                const QString &stepName,
+                                const QString &headline,
+                                const QString &glyph,
+                                QPushButton **backOut,
+                                QPushButton **nextOut)
 {
     QWidget *page = new QWidget(this);
-    QVBoxLayout *v = new QVBoxLayout(page);
-    v->setContentsMargins(40, 30, 40, 30);
+    QHBoxLayout *h = new QHBoxLayout(page);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(0);
 
-    QLabel *intro = new QLabel(
-        tr("Choose which network interface this client should use."), page);
-    intro->setWordWrap(true);
-    v->addWidget(intro);
-    v->addSpacing(16);
+    // --- left: white, the question and the controls ----------------------
+    QWidget *form = new QWidget(page);
+    form->setObjectName(QLatin1String("tpWizardForm"));
+    QVBoxLayout *fv = new QVBoxLayout(form);
+    fv->setContentsMargins(46, 56, 46, 40);
+    fv->setSpacing(0);
 
-    QFormLayout *form = new QFormLayout;
-    form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
-    form->setHorizontalSpacing(20);
-    form->setVerticalSpacing(14);
+    QLabel *q = new QLabel(question, form);
+    q->setObjectName(QLatin1String("tpWizardQuestion"));
+    q->setWordWrap(true);
+    fv->addWidget(q);
+    fv->addSpacing(28);
 
-    m_interface = new QComboBox(page);
-    m_method = new QComboBox(page);
+    body->setParent(form);
+    fv->addWidget(body, 1);
+
+    QPushButton *back = new QPushButton(tr("Previous"), form);
+    QPushButton *next = new QPushButton(tr("Next"), form);
+    back->setProperty("tpPrimary", true);
+    next->setProperty("tpPrimary", true);
+    back->setMinimumSize(150, 48);
+    next->setMinimumSize(150, 48);
+    connect(back, SIGNAL(clicked()), this, SLOT(onBack()));
+    connect(next, SIGNAL(clicked()), this, SLOT(onNext()));
+
+    QHBoxLayout *nav = new QHBoxLayout;
+    nav->setSpacing(18);
+    nav->addWidget(back);
+    nav->addWidget(next);
+    nav->addStretch(1);
+    fv->addLayout(nav);
+
+    *backOut = back;
+    *nextOut = next;
+
+    // --- right: slate, the step pill and the illustration -----------------
+    QWidget *aside = new QWidget(page);
+    aside->setObjectName(QLatin1String("tpWizardAside"));
+    QVBoxLayout *av = new QVBoxLayout(aside);
+    av->setContentsMargins(40, 34, 40, 30);
+    av->setSpacing(0);
+
+    // stepIndex counts from the first split page, not from the cover.
+    const int stepIndex = m_pages->count() - 1;
+    av->addWidget(buildStepBar(stepIndex, stepName));
+    av->addStretch(1);
+
+    // ThinPro has a drawn illustration per step. A single large glyph says
+    // the same thing at a tenth of the weight, and weight is the whole
+    // reason this project exists.
+    QLabel *art = new QLabel(glyph, aside);
+    art->setAlignment(Qt::AlignCenter);
+    art->setStyleSheet(QLatin1String("color: #8E97BB; font-size: 130px;"));
+    av->addWidget(art);
+    av->addStretch(1);
+
+    QLabel *head = new QLabel(headline, aside);
+    head->setObjectName(QLatin1String("tpWizardHeadline"));
+    head->setWordWrap(true);
+    av->addWidget(head);
+    av->addSpacing(16);
+
+    QLabel *sub = new QLabel(tr(kReassurance), aside);
+    sub->setObjectName(QLatin1String("tpWizardSubtitle"));
+    sub->setWordWrap(true);
+    av->addWidget(sub);
+    av->addSpacing(26);
+
+    QLabel *brand = new QLabel(tr("ThinPro NG"), aside);
+    brand->setObjectName(QLatin1String("tpWizardBrand"));
+    brand->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    av->addWidget(brand);
+
+    h->addWidget(form, 42);
+    h->addWidget(aside, 58);
+    return page;
+}
+
+QWidget *Wizard::buildKeyboardBody()
+{
+    QWidget *body = new QWidget(this);
+    QVBoxLayout *v = new QVBoxLayout(body);
+    v->setContentsMargins(0, 0, 0, 0);
+
+    m_keyboard = new QComboBox(body);
+    m_keyboard->setEditable(true);
+    m_keyboard->setMinimumHeight(46);
+
+    // Offer whatever xkb actually has, falling back to the layouts the
+    // language list knows about on an image without the xkb data.
+    const QString layouts = HwCheck::runCommand(QLatin1String(
+        "ls -1 /usr/share/X11/xkb/symbols 2>/dev/null "
+        "| grep -vE '^(group|level|srvr_ctrl|keypad|capslock|ctrl|shift|"
+        "altwin|compose|eurosign|nbsp|pc|inet|typo|terminate)$' | sort"), 6000);
+    if (!layouts.isEmpty())
+        m_keyboard->addItems(layouts.split(QLatin1Char('\n'), Qt::SkipEmptyParts));
+    else
+        for (int i = 0; kLanguages[i].code; ++i) {
+            const QString kb = QString::fromLatin1(kLanguages[i].keyboard);
+            if (m_keyboard->findText(kb) < 0)
+                m_keyboard->addItem(kb);
+        }
+
+    v->addWidget(m_keyboard);
+    v->addStretch(1);
+    return body;
+}
+
+QWidget *Wizard::buildNetworkBody()
+{
+    QWidget *body = new QWidget(this);
+    QVBoxLayout *v = new QVBoxLayout(body);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(14);
+
+    m_interfaces = new QListWidget(body);
+    v->addWidget(m_interfaces, 1);
+
+    m_method = new QComboBox(body);
     m_method->addItem(tr("Automatic (DHCP)"), QLatin1String("dhcp"));
     m_method->addItem(tr("Static address"), QLatin1String("static"));
+    m_method->setMinimumHeight(40);
+    v->addWidget(m_method);
 
-    form->addRow(tr("Interface:"), m_interface);
-    form->addRow(tr("Addressing:"), m_method);
-    v->addLayout(form);
-
-    v->addSpacing(12);
-    m_netStatus = new QLabel(page);
+    m_netStatus = new QLabel(body);
     m_netStatus->setWordWrap(true);
     v->addWidget(m_netStatus);
 
-    QPushButton *refresh = new QPushButton(tr("Refresh"), page);
-    connect(refresh, SIGNAL(clicked()), this, SLOT(onRefreshNetwork()));
-    QHBoxLayout *rl = new QHBoxLayout;
-    rl->addWidget(refresh);
-    rl->addStretch(1);
-    v->addLayout(rl);
-
-    v->addStretch(1);
     onRefreshNetwork();
-    return page;
+    return body;
 }
 
-QWidget *Wizard::buildCheckPage()
+QWidget *Wizard::buildDateTimeBody()
 {
-    QWidget *page = new QWidget(this);
-    QVBoxLayout *v = new QVBoxLayout(page);
-    v->setContentsMargins(40, 30, 40, 30);
+    QWidget *body = new QWidget(this);
+    QVBoxLayout *v = new QVBoxLayout(body);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(18);
 
-    QLabel *intro = new QLabel(
-        tr("This is what the client found. Anything marked as a problem "
-           "will simply be unavailable -- you can still continue."), page);
-    intro->setWordWrap(true);
-    v->addWidget(intro);
-    v->addSpacing(12);
+    // ThinPro asks for the area and the city separately. The full zone list
+    // is nine hundred entries long, and nobody scrolls that.
+    m_zoneArea = new QComboBox(body);
+    m_zoneCity = new QComboBox(body);
+    m_zoneArea->setMinimumHeight(46);
+    m_zoneCity->setMinimumHeight(46);
 
-    m_checkProgress = new QProgressBar(page);
+    const QString zones = HwCheck::runCommand(QLatin1String(
+        "find /usr/share/zoneinfo/posix -type f 2>/dev/null "
+        "| sed 's|/usr/share/zoneinfo/posix/||' | sort"), 8000);
+    const QStringList all = zones.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+
+    QStringList areas;
+    for (int i = 0; i < all.size(); ++i) {
+        const QString area = all.at(i).section(QLatin1Char('/'), 0, 0);
+        if (!area.isEmpty() && !areas.contains(area))
+            areas.append(area);
+    }
+    if (areas.isEmpty())
+        areas << QLatin1String("UTC");
+    m_zoneArea->addItems(areas);
+
+    connect(m_zoneArea, &QComboBox::currentTextChanged, this,
+            [this, all](const QString &area) {
+        m_zoneCity->clear();
+        for (int i = 0; i < all.size(); ++i)
+            if (all.at(i).section(QLatin1Char('/'), 0, 0) == area)
+                m_zoneCity->addItem(all.at(i).section(QLatin1Char('/'), 1));
+        if (m_zoneCity->count() == 0)
+            m_zoneCity->addItem(QString());
+    });
+    if (!areas.isEmpty())
+        m_zoneArea->setCurrentIndex(0);
+
+    v->addWidget(m_zoneArea);
+    v->addWidget(m_zoneCity);
+    v->addStretch(1);
+    return body;
+}
+
+QWidget *Wizard::buildCheckBody()
+{
+    QWidget *body = new QWidget(this);
+    QVBoxLayout *v = new QVBoxLayout(body);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(12);
+
+    m_checkProgress = new QProgressBar(body);
     m_checkProgress->setRange(0, 1);
     m_checkProgress->setValue(0);
     m_checkProgress->setTextVisible(false);
     v->addWidget(m_checkProgress);
 
-    m_checkList = new QListWidget(page);
+    m_checkList = new QListWidget(body);
     v->addWidget(m_checkList, 1);
 
-    m_checkSummary = new QLabel(page);
+    m_checkSummary = new QLabel(body);
     m_checkSummary->setWordWrap(true);
     v->addWidget(m_checkSummary);
+
+    return body;
+}
+
+// ---------------------------------------------------------------------------
+// The done page
+// ---------------------------------------------------------------------------
+
+QWidget *Wizard::buildDonePage()
+{
+    QWidget *page = new QWidget(this);
+    page->setObjectName(QLatin1String("tpWizardCover"));
+
+    QVBoxLayout *v = new QVBoxLayout(page);
+    v->setContentsMargins(0, 60, 0, 60);
+    v->addStretch(1);
+
+    QLabel *tick = new QLabel(QString::fromUtf8("\xe2\x9c\x93"), page);
+    tick->setAlignment(Qt::AlignCenter);
+    tick->setStyleSheet(QLatin1String(
+        "color: #4E9A3D; font-size: 200px; font-weight: 300;"));
+    v->addWidget(tick);
+
+    QLabel *done = new QLabel(tr("All done !"), page);
+    done->setObjectName(QLatin1String("tpDoneMessage"));
+    v->addWidget(done);
+    v->addStretch(1);
+
+    QPushButton *launch = new QPushButton(tr("Launch ThinPro NG"), page);
+    launch->setProperty("tpPrimary", true);
+    launch->setMinimumSize(380, 52);
+    connect(launch, SIGNAL(clicked()), this, SLOT(onNext()));
+
+    QHBoxLayout *gl = new QHBoxLayout;
+    gl->addStretch(1);
+    gl->addWidget(launch);
+    gl->addStretch(1);
+    v->addLayout(gl);
 
     return page;
 }
 
+// ---------------------------------------------------------------------------
+// Network
+// ---------------------------------------------------------------------------
+
 void Wizard::onRefreshNetwork()
 {
-    if (!m_interface)
+    if (!m_interfaces)
         return;
 
-    const QString current = m_interface->currentText();
-    m_interface->clear();
+    const QString previous = m_interfaces->currentItem()
+        ? m_interfaces->currentItem()->data(Qt::UserRole).toString()
+        : QString();
+
+    m_interfaces->clear();
 
     const QString list = HwCheck::runCommand(QLatin1String(
         "ip -o link show 2>/dev/null | awk -F': ' '$2 != \"lo\" { print $2 }'"));
@@ -249,18 +543,19 @@ void Wizard::onRefreshNetwork()
         else
             label += tr("  (no link)");
 
-        m_interface->addItem(label, name);
+        QListWidgetItem *item = new QListWidgetItem(label, m_interfaces);
+        item->setData(Qt::UserRole, name);
+        if (name == previous)
+            m_interfaces->setCurrentItem(item);
     }
 
-    if (m_interface->count() == 0) {
-        m_interface->addItem(tr("No interface found"), QString());
+    if (m_interfaces->count() == 0) {
         m_netStatus->setObjectName(QLatin1String("tpStatusFail"));
         m_netStatus->setText(tr("No network interface is present. The client "
                                 "will start, but no session can connect."));
     } else {
-        const int idx = m_interface->findText(current);
-        if (idx >= 0)
-            m_interface->setCurrentIndex(idx);
+        if (!m_interfaces->currentItem())
+            m_interfaces->setCurrentRow(0);
         m_netStatus->setObjectName(QLatin1String("tpStatusOk"));
         m_netStatus->setText(QString());
     }
@@ -268,20 +563,27 @@ void Wizard::onRefreshNetwork()
     m_netStatus->style()->polish(m_netStatus);
 }
 
+// ---------------------------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------------------------
+
 void Wizard::showPage(int index)
 {
     m_pages->setCurrentIndex(index);
 
-    static const char *titles[] = {
-        QT_TR_NOOP("Language"),
-        QT_TR_NOOP("Network"),
-        QT_TR_NOOP("Hardware check"),
-    };
-    m_title->setText(tr(titles[index]));
-    m_step->setText(tr("Step %1 of %2").arg(index + 1).arg(PageCount));
+    // The split pages carry their own buttons, so the only per-page state
+    // to fix up is what the last one's Next button says.
+    const int split = index - PageKeyboard;
+    if (split >= 0 && split < m_backButtons.size()) {
+        m_backButtons.at(split)->setEnabled(index > PageKeyboard);
 
-    m_back->setEnabled(index > 0);
-    m_next->setText(index == PageCount - 1 ? tr("Finish") : tr("Next"));
+        if (index == PageNetwork && m_interfaces && m_interfaces->count() == 0)
+            m_nextButtons.at(split)->setText(tr("Skip"));
+        else if (index == PageCheck)
+            m_nextButtons.at(split)->setText(tr("Finish"));
+        else
+            m_nextButtons.at(split)->setText(tr("Next"));
+    }
 
     if (index == PageCheck && !m_checkDone)
         startCheck();
@@ -297,13 +599,22 @@ void Wizard::onBack()
 void Wizard::onNext()
 {
     const int index = m_pages->currentIndex();
-    if (index < PageCount - 1) {
-        showPage(index + 1);
+
+    if (index == PageCheck) {
+        commit();
+        showPage(PageDone);
         return;
     }
-    commit();
-    close();
+    if (index == PageDone) {
+        close();
+        return;
+    }
+    showPage(index + 1);
 }
+
+// ---------------------------------------------------------------------------
+// The hardware check
+// ---------------------------------------------------------------------------
 
 void Wizard::startCheck()
 {
@@ -311,9 +622,9 @@ void Wizard::startCheck()
     m_checkList->clear();
     m_checkSummary->clear();
 
-    // The check must not strand the user on a page with no way forward, so
-    // Finish only greys out for the seconds the probes take.
-    m_next->setEnabled(false);
+    // Finish only greys out for the seconds the probes take; it is never
+    // withheld because of what they found.
+    m_nextButtons.at(PageCheck - PageKeyboard)->setEnabled(false);
 
     m_check = new HwCheck(this);
     connect(m_check, SIGNAL(progress(int,int,QString)),
@@ -338,21 +649,20 @@ void Wizard::onCheckFinished()
     for (int i = 0; i < results.size(); ++i) {
         const CheckResult &r = results.at(i);
 
-        QString mark;
-        QColor colour;
+        // ThinPro's own Compatibility Check draws every glyph in blue, pass
+        // or fail: the dialog is describing the hardware, not scolding
+        // anyone for it. The shape of the glyph carries the verdict.
+        QString glyph;
         switch (r.status) {
-        case CheckResult::Ok:
-            mark = tr("OK");     colour = QColor(0x2E, 0x7D, 0x32); break;
-        case CheckResult::Warn:
-            mark = tr("Check");  colour = QColor(0xB2, 0x65, 0x00); ++warnings; break;
-        case CheckResult::Fail:
-            mark = tr("Failed"); colour = QColor(0xB0, 0x00, 0x20); ++failures; break;
+        case CheckResult::Ok:   glyph = QString::fromUtf8("\xe2\x9c\x93"); break;
+        case CheckResult::Warn: glyph = QString::fromUtf8("\xe2\x9a\xa0"); ++warnings; break;
+        case CheckResult::Fail: glyph = QString::fromUtf8("\xe2\x9c\x95"); ++failures; break;
         }
 
         QListWidgetItem *item = new QListWidgetItem(
-            tr("%1    %2 - %3").arg(mark, -7).arg(r.label, r.detail),
+            QString::fromLatin1("%1  %2 - %3").arg(glyph, r.label, r.detail),
             m_checkList);
-        item->setForeground(colour);
+        item->setForeground(QColor(0x0F, 0x6F, 0xA8));
     }
 
     if (failures == 0 && warnings == 0)
@@ -367,22 +677,36 @@ void Wizard::onCheckFinished()
             .arg(warnings));
 
     m_checkProgress->setValue(m_checkProgress->maximum());
-    m_next->setEnabled(true);
-    m_next->setFocus();
+    QPushButton *next = m_nextButtons.at(PageCheck - PageKeyboard);
+    next->setEnabled(true);
+    next->setFocus();
 }
+
+// ---------------------------------------------------------------------------
+// Saving
+// ---------------------------------------------------------------------------
 
 void Wizard::commit()
 {
-    const QString locale = m_language->currentData().toString();
-    m_reg->setValue(QLatin1String("root/locale/language"), locale);
+    if (kLanguages[m_language].code)
+        m_reg->setValue(QLatin1String("root/locale/language"),
+                        QString::fromLatin1(kLanguages[m_language].code));
+    m_reg->setValue(QLatin1String("root/i18n/locale"),
+                    QString::fromLatin1(kLanguages[m_language].code));
     m_reg->setValue(QLatin1String("root/keyboard/layout"),
                     m_keyboard->currentText());
-    m_reg->setValue(QLatin1String("root/time/timezone"),
-                    m_timezone->currentText());
 
-    const QString iface = m_interface->currentData().toString();
-    if (!iface.isEmpty())
-        m_reg->setValue(QLatin1String("root/network/interface"), iface);
+    QString zone = m_zoneArea->currentText();
+    if (!m_zoneCity->currentText().isEmpty())
+        zone += QLatin1Char('/') + m_zoneCity->currentText();
+    m_reg->setValue(QLatin1String("root/time/timezone"), zone);
+
+    if (m_interfaces->currentItem()) {
+        const QString iface =
+            m_interfaces->currentItem()->data(Qt::UserRole).toString();
+        if (!iface.isEmpty())
+            m_reg->setValue(QLatin1String("root/network/interface"), iface);
+    }
     m_reg->setValue(QLatin1String("root/network/method"),
                     m_method->currentData().toString());
 
@@ -414,4 +738,5 @@ void Wizard::commit()
     // Apply what was just chosen, rather than waiting for a reboot.
     HwCheck::runCommand(QLatin1String("/etc/tp/panels/keyboard.apply"), 8000);
     HwCheck::runCommand(QLatin1String("/etc/tp/panels/datetime.apply"), 8000);
+    HwCheck::runCommand(QLatin1String("/etc/tp/panels/language.apply"), 8000);
 }

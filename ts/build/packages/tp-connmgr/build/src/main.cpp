@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QIcon>
+#include <QStringList>
 
 #include "kioskpanel.h"
 #include "mainwindow.h"
@@ -45,8 +46,17 @@ int main(int argc, char *argv[])
     model.reload();
 
     const QString user = envOr("USER", QLatin1String("user"));
-    const bool kiosk = reg.boolValue(
+
+    // Normally the registry decides. The flags are for the session script,
+    // which already knows which way it wants this to come up, and for
+    // testing a kiosk without first writing a key into a live registry.
+    const QStringList args = app.arguments();
+    bool kiosk = reg.boolValue(
         QLatin1String("root/users/") + user + QLatin1String("/kioskMode"), false);
+    if (args.contains(QLatin1String("--kiosk")))
+        kiosk = true;
+    if (args.contains(QLatin1String("--window")))
+        kiosk = false;
 
     // Two presentations of the same model, the way ThinPro's hptc-kiosk
     // carries both MainWindow and KioskWindow.

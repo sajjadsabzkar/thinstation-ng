@@ -363,3 +363,232 @@ QProgressBar::chunk {
     background: #0096D6;
     border-radius: 3px;
 }
+
+/* ===========================================================================
+ * Taken from screenshots of ThinPro 8.1 running, not from its stylesheet.
+ *
+ * default.qss describes the control panel. It says nothing about the setup
+ * wizard, the kiosk sidebar or the dialogs, and those turn out not to follow
+ * it: the wizard is a two-colour split with a slate right half, the dialogs
+ * sit on a warm grey rather than #F8F8F8, and the sidebar is a 60px strip,
+ * not a drawer. The values below are read off the running product.
+ * =========================================================================== */
+
+/* ---- dialogs ------------------------------------------------------------- */
+
+/* Warm grey, not the panel white. Visible behind the Compatibility Check and
+ * the Configuration Wizard. */
+QDialog {
+    background: #EFEDEA;
+}
+
+QDialog QLabel {
+    background: transparent;
+}
+
+/* ---- the kiosk sidebar --------------------------------------------------- */
+
+/* A 60px strip down the right edge. In Smart Zero this is the entire shell:
+ * there is no taskbar and no desktop behind it. */
+QWidget#tpKioskPanel {
+    background: #F2F2F2;
+    border-left: 1px solid #C6C6C6;
+}
+
+/* The hamburger sits in its own slightly darker cell at the top. */
+QPushButton#tpKioskMenuButton {
+    background: #E4E4E4;
+    border: none;
+    border-bottom: 1px solid #C6C6C6;
+    color: #0096D6;
+    font-size: 22px;
+    min-height: 44px;
+    max-height: 44px;
+    padding: 0px;
+}
+
+QPushButton#tpKioskMenuButton:hover {
+    background: #D8D8D8;
+}
+
+/* The tray icons down the bottom of the strip. */
+QPushButton#tpTrayButton {
+    background: transparent;
+    border: none;
+    color: #0F6FA8;
+    font-size: 17px;
+    min-height: 38px;
+    max-height: 38px;
+    padding: 0px;
+}
+
+QPushButton#tpTrayButton:hover {
+    background: #E0E0E0;
+}
+
+QLabel#tpKioskClock {
+    color: #0F6FA8;
+    font-size: 11px;
+    qproperty-alignment: AlignCenter;
+    padding: 2px 0px 6px 0px;
+}
+
+/* ---- the sidebar menu ---------------------------------------------------- */
+
+/* Roomier than an ordinary Qt menu: this one is meant to be hit with a
+ * finger on a kiosk, and ThinPro gives each row about 48px. */
+QMenu#tpKioskMenu {
+    background: #FFFFFF;
+    border: 1px solid #BFBFBF;
+    padding: 0px;
+}
+
+QMenu#tpKioskMenu::item {
+    background: transparent;
+    color: #1A1A1A;
+    font-size: 15px;
+    padding: 14px 28px 14px 16px;
+    min-height: 22px;
+}
+
+QMenu#tpKioskMenu::item:selected {
+    background: #E8E8E8;
+}
+
+QMenu#tpKioskMenu::separator {
+    height: 1px;
+    background: #4A4A4A;
+    margin: 4px 0px;
+}
+
+QMenu#tpKioskMenu::icon {
+    padding-left: 14px;
+}
+
+/* The search box pinned to the bottom of that menu. */
+QLineEdit#tpMenuSearch {
+    background: #6E6E6E;
+    border: none;
+    color: #FFFFFF;
+    font-style: italic;
+    font-size: 15px;
+    padding: 10px 12px;
+}
+
+/* ---- the setup wizard ---------------------------------------------------- */
+
+/* Left half: white, the form. */
+QWidget#tpWizardForm {
+    background: #FFFFFF;
+}
+
+QLabel#tpWizardQuestion {
+    color: #0096D6;
+    font-size: 30px;
+    font-weight: 300;
+}
+
+/* Right half: slate, the illustration and the step indicator. */
+QWidget#tpWizardAside {
+    background: #4C5680;
+}
+
+QLabel#tpWizardHeadline {
+    color: #FFFFFF;
+    font-size: 36px;
+    font-weight: 300;
+    qproperty-alignment: AlignCenter;
+}
+
+QLabel#tpWizardSubtitle {
+    color: #C6CBDF;
+    font-size: 16px;
+    qproperty-alignment: AlignCenter;
+}
+
+QLabel#tpWizardBrand {
+    color: #D5D9E6;
+    font-size: 22px;
+    font-weight: 300;
+}
+
+/* The step pill: a darker blue bar carrying a dot per step. */
+QFrame#tpWizardSteps {
+    background: #0A6E9E;
+    border-radius: 6px;
+    min-height: 54px;
+}
+
+QLabel#tpWizardStepName {
+    color: #FFFFFF;
+    font-size: 19px;
+    font-weight: bold;
+    background: transparent;
+}
+
+QLabel#tpWizardStepDot {
+    color: #FFFFFF;
+    font-size: 15px;
+    background: transparent;
+}
+
+/* The language page and the finish page are full-width white instead. */
+QWidget#tpWizardCover {
+    background: #FFFFFF;
+}
+
+QPushButton#tpLanguageChoice {
+    background: transparent;
+    border: none;
+    color: #0096D6;
+    font-size: 26px;
+    padding: 6px 14px;
+}
+
+QPushButton#tpLanguageChoice:hover {
+    color: #007CB0;
+}
+
+QPushButton#tpLanguageChoice[tpSelected="true"] {
+    border-bottom: 3px solid #0096D6;
+}
+
+QLabel#tpDoneMessage {
+    color: #4E9A3D;
+    font-size: 40px;
+    qproperty-alignment: AlignCenter;
+}
+
+/* ---- the compatibility check -------------------------------------------- */
+
+/* One row per check: a status glyph, the name in bold, the detail under it.
+ * ThinPro draws even the failures in blue rather than red - the dialog is
+ * telling you what the hardware is, not warning you off it. */
+QLabel#tpCheckName {
+    color: #1A1A1A;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+QLabel#tpCheckDetail {
+    color: #6B6B6B;
+    font-size: 13px;
+}
+
+QLabel#tpCheckGlyph {
+    color: #0F6FA8;
+    font-size: 24px;
+    qproperty-alignment: AlignCenter;
+}
+
+/* ---- the control panel home --------------------------------------------- */
+
+/* White body under the grey search strip, two columns of categories. */
+QWidget#tpHomeBody {
+    background: #FFFFFF;
+}
+
+QLabel#tpCategoryIcon {
+    color: #0F6FA8;
+    font-size: 26px;
+}

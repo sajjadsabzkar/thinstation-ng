@@ -1,5 +1,7 @@
 #include "tpstyle.h"
 
+#include <QFontMetrics>
+
 #include <QApplication>
 #include <QByteArray>
 #include <QFile>
@@ -33,4 +35,24 @@ void apply(QApplication *app)
         app->setStyleSheet(QString::fromUtf8(sheet.readAll()));
 }
 
+}
+
+QString TpStyle::glyph(const QFont &font, const char *const *candidates)
+{
+    const QFontMetrics metrics(font);
+    for (int i = 0; candidates && candidates[i]; ++i) {
+        const QString candidate = QString::fromUtf8(candidates[i]);
+        if (candidate.isEmpty())
+            continue;
+
+        // Anything above the BMP arrives as a surrogate pair, and inFont()
+        // only takes a QChar, so ask by code point instead.
+        const uint ucs4 = (candidate.at(0).isHighSurrogate() && candidate.size() > 1)
+            ? QChar::surrogateToUcs4(candidate.at(0), candidate.at(1))
+            : candidate.at(0).unicode();
+
+        if (metrics.inFontUcs4(ucs4))
+            return candidate;
+    }
+    return QString();
 }

@@ -1,0 +1,347 @@
+# راه‌اندازی محیط بیلد ThinPro روی یک ماشین جدید
+
+این سند فرض می‌کند از صفر شروع می‌کنی: یک ماشین میزبان، یک VM که DevStation
+روی آن نصب است، و برنچ `thinpro` که باید بیلد شود.
+
+هر بخش با «تله»هایی که در عمل وقت گرفتند همراه است. آن‌ها را نخوان و دوباره
+همان‌ها را کشف خواهی کرد.
+
+---
+
+## ۱. شبکه‌ی VMware
+
+قبل از هر چیز مطمئن شو میزبان به زیرشبکه‌ی VM مسیر دارد:
+
+```bash
+ip -4 a show vmnet8          # باید آدرس 192.168.246.1/24 بدهد
+ip route get 192.168.246.135 # باید از vmnet8 برود، نه از کارت اینترنت
+```
+
+**تله:** اگر `vmnet8` آدرس دیگری داشت (مثلاً `192.168.1.100/24`)،
+NetworkManager یک پروفایل استاتیک بی‌قید را روی آن نشانده است. نشانه‌اش:
+
+```bash
+nmcli -t -f DEVICE,STATE,CONNECTION dev status | grep vmnet8
+nmcli -f connection.interface-name con show <آن پروفایل>   # خروجی: --
+```
+
+یعنی پروفایل به هیچ کارتی pin نشده و NetworkManager آن را روی اولین اینترفیس
+اترنت آزاد — که `vmnet8` است — اعمال کرده. در این حالت بسته‌های تو به جای VM
+از gateway اینترنت بیرون می‌روند و یک middlebox سر راه به همه‌ی پورت‌ها پاسخ
+«باز» می‌دهد و بلافاصله قطع می‌کند. علامت مشخصه‌اش این است که `ping` صددرصد
+drop می‌شود ولی پورت ۲۲ و ۲۳ و ۸۰ و ۳۳۸۹ همه «باز» به نظر می‌رسند.
+
+درمان:
+
+```bash
+sudo tee /etc/NetworkManager/conf.d/99-vmware-unmanaged.conf >/dev/null <<'EOF'
+[keyfile]
+unmanaged-devices=interface-name:vmnet*
+EOF
+sudo nmcli con mod <آن پروفایل> connection.interface-name <کارت واقعی>
+sudo systemctl reload NetworkManager
+sudo ip addr flush dev vmnet8
+sudo vmware-networks --stop && sudo vmware-networks --start
+```
+
+برای پیدا کردن IP فعلی VM:
+
+```bash
+cat /etc/vmware/vmnet8/dhcpd/dhcpd.leases   # آخرین lease با client-hostname
+```
+
+---
+
+## ۲. بالا آوردن VM — حتماً headless
+
+```bash
+vmrun -T ws start /path/to/ThinStation.vmx nogui
+vmrun list
+```
+
+**چرا headless:** اگر VM را از رابط گرافیکی VMware اجرا کنی، رشته‌ی `mks`
+(نمایش VM) به X میزبان وصل می‌شود. هر اتفاقی که آن اتصال را قطع کند — قفل شدن
+صفحه، ری‌استارت کامپوزیتور، خروج از حساب، یا ری‌استارت میزبان — باعث می‌شود
+`vmware-vmx` کل پروسه را panic کند و VM وسط کار بمیرد. در لاگ VM این‌طور
+دیده می‌شود:
+
+```
+XConnection: Closing console display
+PANIC: XINFO: IO fatal error.
+```
+
+یک بیلد چهارساعته دقیقاً به همین شکل از بین رفت. حالت headless اصلاً به X
+وصل نمی‌شود.
+
+**اگر VM با پیام `The file is already in use` بالا نیامد** یعنی از کشته‌شدن
+ناگهانی قبلی قفل مانده. اول مطمئن شو واقعاً چیزی اجرا نیست، بعد پاک کن:
+
+```bash
+ps -eo args | grep -c '[v]mware-vmx'    # باید 0 باشد
+rm -rf /path/to/VM/*.lck
+```
+
+لاگ خود VM برای فهمیدن علت مرگ:
+
+```bash
+tail -40 /path/to/VM/vmware.log
+grep -nE 'PANIC|Exception|Backtrace' /path/to/VM/vmware.log | tail
+```
+
+---
+
+## ۳. دسترسی SSH
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ecdsa.pub sajjad@<IP>
+```
+
+**تله ۱ — کلید Ed25519 پذیرفته نمی‌شود.** سیاست رمزنگاری آن سیستم فقط ECDSA و
+`rsa-sha2` را قبول دارد. اگر کلیدت Ed25519 باشد، `ssh-copy-id` موفق می‌شود
+ولی ورود همچنان رد می‌شود و در لاگ سمت سرور این را می‌بینی:
+
+```
+userauth_pubkey: signature algorithm ssh-ed25519 not in PubkeyAcceptedAlgorithms
+```
+
+کلید مناسب بساز:
+
+```bash
+ssh-keygen -t ecdsa -b 521 -N '' -f ~/.ssh/id_ecdsa
+```
+
+**تله ۲ — `IdentitiesOnly` اجباری است.** بدون آن، ssh اول کلید Ed25519 را
+پیشنهاد می‌دهد، سرور کل اتصال را می‌بندد و هرگز به کلید درست نمی‌رسد. پس در
+`~/.ssh/config`:
+
+```
+Host thinstation
+    HostName 192.168.246.135
+    User sajjad
+    IdentityFile ~/.ssh/id_ecdsa
+    IdentitiesOnly yes
+    ServerAliveInterval 30
+```
+
+**تله ۳ — جریمه‌ی IP.** OpenSSH نسخه ۹.۸ به بعد `PerSourcePenalties` دارد.
+چند تلاش ناموفق pubkey باعث می‌شود IP تو تا چند دقیقه کاملاً بلاک شود و
+اتصال حتی قبل از بنر ریست شود:
+
+```
+kex_exchange_identification: Connection reset by peer
+```
+
+این یعنی «جریمه شده‌ای»، نه «سرویس خراب است». یک تا پنج دقیقه صبر کن.
+
+---
+
+## ۴. انتقال کد به VM
+
+اگر VM به GitHub دسترسی دارد، ساده‌ترین راه `git fetch` معمولی است. اگر ندارد
+یا نمی‌خواهی چیزی push کنی، `git bundle` کل برنچ را در یک فایل می‌برد:
+
+```bash
+# روی میزبان
+git bundle create /tmp/thinpro.bundle <کامیت-پایه>..thinpro
+scp /tmp/thinpro.bundle thinstation:/tmp/
+
+# روی VM
+sudo git -c safe.directory=/thinstation -C /thinstation \
+     fetch /tmp/thinpro.bundle thinpro:thinpro
+sudo git -c safe.directory=/thinstation -C /thinstation checkout thinpro
+```
+
+برای به‌روزرسانی‌های بعدی، به‌جای `thinpro:thinpro` فقط `thinpro` بده و بعد
+`merge --ff-only FETCH_HEAD` کن.
+
+**تله — بیت اجرا.** اگر مخزن میزبان روی فایل‌سیستمی باشد که مود را نگه
+نمی‌دارد (مثل fuseblk یا NTFS)، گیت `core.fileMode=false` می‌گیرد و هر فایل
+اجرایی جدید را با مود `100644` کامیت می‌کند. روی VM آن فایل‌ها غیرقابل‌اجرا
+درمی‌آیند و در زمان بوت فقط یک «Permission denied» خشک می‌گیری. بررسی و
+اصلاح:
+
+```bash
+git ls-files -s <مسیر>/bin/            # باید 100755 باشد نه 100644
+git update-index --chmod=+x <فایل‌ها>
+```
+
+---
+
+## ۵. کامپایل باینری‌های Qt
+
+سه باینری ما (`tp-connmgr`, `tp-controlpanel`, `tp-panel`) از پیش کامپایل‌شده
+در مخزن هستند، چون ThinStation هیچ‌وقت در زمان بیلد کامپایل نمی‌کند (همان
+الگوی پکیج `gtkdialog`). ولی اگر سورس را تغییر دادی، **داخل chroot** کامپایل
+کن تا با همان Qt که داخل ایمیج می‌رود لینک شود:
+
+```bash
+cd /thinstation
+sudo ./setup-chroot -e dnf -y install gcc-c++ qt5-qtbase-devel
+```
+
+اسکریپت بیلد را در `/thinstation/root/qtbuild.sh` بگذار (یعنی `/root` از
+دید chroot):
+
+```sh
+#!/bin/sh
+set -e
+build_one() {
+	name="$1"; dir="$2"; out="$3"
+	rm -rf /tmp/b-$name; mkdir -p /tmp/b-$name; cd /tmp/b-$name
+	qmake-qt5 "$dir/$name.pro" >/dev/null
+	make -j2 2>&1 | grep -E "error|warning|Error" || true
+	if [ -x "$name" ]; then
+		strip "$name"; mkdir -p "$out"; cp "$name" "$out/$name"
+		echo "OK   $name  $(stat -c%s $name) bytes"
+	else
+		echo "FAIL $name"; return 1
+	fi
+}
+P=/ts/build/packages
+build_one tp-controlpanel $P/tp-controlpanel/build/src       $P/tp-controlpanel/bin
+build_one tp-panel        $P/tp-controlpanel/build/src-panel $P/tp-controlpanel/bin
+build_one tp-connmgr      $P/tp-connmgr/build/src            $P/tp-connmgr/bin
+```
+
+سپس:
+
+```bash
+sudo ./setup-chroot -e sh /root/qtbuild.sh
+```
+
+**تله:** `/tmp` میزبان با `/tmp` داخل chroot یکی نیست؛ اسکریپت را در
+`/thinstation/root/` بگذار نه `/thinstation/tmp/`.
+
+کامپایل روی ۲ هسته ماشین را خفه می‌کند (load average تا ۱۱ می‌رود) و ssh
+جواب نمی‌دهد. اگر عجله نداری با `nice -n 10` و detached اجرا کن.
+
+صحت باینری را بعد از کامپایل بررسی کن:
+
+```bash
+readelf -d <باینری> | grep NEEDED       # فقط Qt5Widgets/Gui/Core + libc
+readelf -n <باینری> | grep 'ISA needed' # باید x86-64-baseline باشد
+```
+
+`x86-64-baseline` یعنی روی پردازنده‌های نسل Core 2 هم اجرا می‌شود. اگر `v2`
+شد، `SSE4.2` می‌خواهد و روی سخت‌افزار هدف بالا نمی‌آید.
+
+---
+
+## ۶. آماده‌سازی پکیج‌های جدید
+
+هر پکیجی که فایلی به آن اضافه یا از آن کم شده، مانیفست `.dna` می‌خواهد:
+
+```bash
+sudo ./setup-chroot -e sh /root/mkdna.sh
+```
+
+با محتوای:
+
+```sh
+cd /ts/build/packages
+for p in tp-registry tp-connmgr tp-controlpanel; do makedna $p; done
+```
+
+**تله:** `setup-chroot -e` نقل‌قول‌ها و `;` را به‌هم می‌ریزد. هر چیزی
+پیچیده‌تر از یک دستور ساده را در یک فایل اسکریپت بگذار.
+
+**تله مهم‌تر:** پکیج انتخاب‌شده با `cp -a $pkgpath/* ./tmp-tree` **کامل** به
+ایمیج کپی می‌شود و خط پاک‌سازی `rm -rf ./tmp-tree/{dependencies,build,.dna,...}`
+در `build:1496` بالادست کامنت شده. یعنی هر چیزی که در ریشه‌ی پکیج بگذاری سر
+از ریشه‌ی سیستم‌عامل کلاینت درمی‌آورد. سورس‌ها و README را زیر `build/`
+نگه دار.
+
+---
+
+## ۷. اجرای بیلد
+
+```bash
+cd /thinstation/ts/build
+sudo ln -sf conf/thinpro/build.conf.example build.conf
+
+cd /thinstation
+sudo sh -c 'setsid nohup sh -c "yes Y | ./setup-chroot -b" \
+            > /var/log/ts-thinpro.log 2>&1 < /dev/null &'
+```
+
+`yes Y` لازم است چون `repackage` وقتی پکیجی هنوز نصب نشده می‌پرسد
+«Would you like to try and install it now?» و با stdin بسته، `read` فوراً
+EOF می‌گیرد و حلقه بی‌نهایت می‌چرخد.
+
+**تله‌ی بزرگ — حلقه‌ی بی‌نهایت.** در `ts/bin/repackage` این ساختار هست:
+
+```sh
+while [ -z "$archive" ]; do
+	archive=`rpm -q $package | grep -v 'not installed'`
+	...
+done
+```
+
+تا وقتی `rpm -q` موفق نشود این حلقه نمی‌ایستد و پاسخ Y هیچ کمکی نمی‌کند.
+دو دلیل رایج برای شکست `dnf install`:
+
+۱. **دو بیلد هم‌زمان.** اگر بیلد قبلی را با `kill` روی `setup-chroot` کشته
+   باشی، `./build` و فرزندانش زنده می‌مانند و سر قفل RPM با بیلد جدید
+   می‌جنگند. همیشه کل درخت را بکش:
+
+   ```bash
+   ps -eo pid,ppid,args | grep -E '[.]/build|[r]epackage|[d]nf'
+   sudo kill -9 <هر PID>          # با PID، نه با pkill -f
+   ```
+
+   `pkill -f setup-chroot` رشته‌ی دستور ssh خودت را هم می‌کشد.
+
+۲. **DNS یا شبکه.** داخل chroot تست کن:
+
+   ```bash
+   sudo ./setup-chroot -e getent hosts mirrors.fedoraproject.org
+   ```
+
+قفل جامانده را هم بررسی کن:
+
+```bash
+sudo fuser /thinstation/var/lib/rpm/.rpm.lock || echo "not held"
+```
+
+---
+
+## ۸. پایش
+
+```bash
+ssh thinstation 'ps -eo etime,args | grep "[.]/build"'
+ssh thinstation 'sudo tail -f /var/log/ts-thinpro.log'
+ssh thinstation 'sudo ls -lh /thinstation/ts/build/boot-images/grub/'
+```
+
+برای تشخیص گیر کردن، **رشد حجم لاگ** را ببین نه محتوایش. پرامپت
+«Would you like to try...» برای هر پکیج یک بار طبیعی است؛ فقط وقتی مشکل است
+که ده‌ها بار پشت هم بیاید و لاگ رشد نکند.
+
+---
+
+## ۹. برداشتن خروجی
+
+```bash
+ssh thinstation 'sudo cp /thinstation/ts/build/boot-images/grub/*.iso /tmp/ \
+                 && sudo chown $USER /tmp/*.iso'
+scp thinstation:/tmp/*.iso .
+```
+
+برای ساخت فایل `.dd` به‌جای ISO، از `ts/bin/mkgptdrv --loopfile` استفاده کن.
+
+---
+
+## نکات مربوط به سرعت
+
+دانلود از مخازن فدورا ممکن است تا ۱.۵ کیلوبایت بر ثانیه پایین بیاید در حالی
+که اینترنت عمومی سالم است — یعنی مشکل مسیر به زیرساخت فدوراست، نه پهنای باند.
+تست تفکیکی:
+
+```bash
+curl -sL -o /dev/null -w '%{speed_download} B/s\n' http://speedtest.tele2.net/1MB.zip
+curl -sL -o /dev/null -w '%{speed_download} B/s\n' https://dl.fedoraproject.org/pub/fedora/linux/releases/42/Everything/x86_64/os/repodata/repomd.xml
+```
+
+خبر خوب اینکه `keepcache=1` فعال است: بسته‌های دانلودشده در
+`/thinstation/var/cache` می‌مانند و بیلد بعدی دوباره نمی‌گیردشان. بعد از یک
+بیلد کامل، این کش چند گیگابایت می‌شود و ارزش نگه داشتن دارد.

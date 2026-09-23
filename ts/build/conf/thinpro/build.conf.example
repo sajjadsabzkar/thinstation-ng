@@ -301,7 +301,8 @@ package xorg7-vmware         # VMware GPU drivers
 ###############################
 # Choose only one window manager.
 
-package xfwm4                # window manager (see XFWM4_SESSION=wm below)
+package openbox              # window manager: 3 MB, against kwin's 194 MB
+package tp-shell             # session, taskbar and first-boot setup wizard
 #package xfce4-power-manager  # Power management for XFCE
 #package xfce4-screensaver    # Session locker for xfce4
 

@@ -792,6 +792,14 @@ web_package ()
 	  exit 1
 	fi
 	rm -Rf ./wget_tmp
+      elif [ -z "$CHOICE" ] ; then
+	# Not a "no": this is what a build fed by a pipe reads once a
+	# read -n 1 elsewhere has left a bare newline, and skipping here
+	# quietly produced an image without the package.
+	echo -e "\nNo answer for $package (non-interactive build? use --autodl)"
+	echo -e "Build Aborted\n"
+	remove_files
+	exit 1
       fi
     else
 	  echo "Error has occured"

@@ -196,12 +196,13 @@ jobs:
           sudo docker run --rm --privileged -v "$WORK:/thinstation" -w /thinstation \
             -e BUILD_OPTIONS "$FEDORA" bash -c '
             dnf -y -q install util-linux psmisc procps-ng findutils which >/dev/null || exit 1
+            # --autodl answers the download prompts of commercial packages
+            # (horizon). Piping yes alone is not enough: an earlier
+            # read -n 1 in repackage leaves a bare newline behind, the
+            # horizon prompt read it as "no", and the build went on without
+            # the client. yes still covers any other prompt.
             # See the install step: only the status of setup-chroot counts.
-            if [ -n "$BUILD_OPTIONS" ]; then
-              yes Y | ./setup-chroot -b -o $BUILD_OPTIONS
-            else
-              yes Y | ./setup-chroot -b
-            fi
+            yes Y | ./setup-chroot -b -o --autodl $BUILD_OPTIONS
             exit ${PIPESTATUS[1]}
           ' 2>&1 | sudo tee "$WORK/build.log" | tail -60
           rc=${PIPESTATUS[0]}

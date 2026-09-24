@@ -44,7 +44,7 @@ done
 
 . /etc/thinstation.global 2>/dev/null
 
-QUEUE=/var/lib/tp/diag/queue
+QUEUE=${TP_DIAG_QUEUE:-/var/lib/tp/diag/queue}
 # One bundle may not be bigger than this; the journal is cut to fit.
 JOURNAL_MAX=$(( 16 * 1024 * 1024 ))
 # The queue as a whole: oldest bundles go first.

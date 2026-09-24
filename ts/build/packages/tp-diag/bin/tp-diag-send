@@ -16,7 +16,7 @@
 
 . /etc/thinstation.global 2>/dev/null
 
-QUEUE=/var/lib/tp/diag/queue
+QUEUE=${TP_DIAG_QUEUE:-/var/lib/tp/diag/queue}
 log() { logger -t tp-diag-send "$*" 2>/dev/null; }
 
 SERVER=`tpreg get root/logging/diag/server 2>/dev/null`
@@ -33,7 +33,7 @@ fi
 
 # One sender at a time: the timer, a boot bundle and a crash bundle can all
 # land at once.
-exec 9>/var/lib/tp/diag/.send.lock
+exec 9>"`dirname $QUEUE`/.send.lock"
 flock -n 9 || exit 1
 
 upload() {	# file -> 0 on HTTP 2xx

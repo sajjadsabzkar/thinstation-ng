@@ -1,5 +1,20 @@
 #!/bin/sh
 export PACKAGE=horizon
 export RPM=`basename $1`
-repackage -e
 
+# Two parts of the 8.19 client that the classic horizon-client (what
+# run_horizon starts) never loads, and that together are over half of it:
+#
+#   html5mmr/                    ~380 MB  embedded Chromium (CEF) for HTML5
+#                                         multimedia redirection; its plugin
+#                                         libhtml5Client.so goes with it, or
+#                                         the agent redirects video the client
+#                                         can no longer play
+#   bin/horizon-client-next-bundle  133 MB  the .NET "next" UI, started only
+#                                         by horizon-client-next
+#
+# Without them the browser video plays inside the remote desktop, as it does
+# for any client without MMR.
+export DROP_FILES="horizon-client-next libhtml5Client.so"
+export DROP_DIRS="lib64/omnissa/horizon/html5mmr lib64/omnissa/horizon/bin/horizon-client-next-bundle"
+repackage -e

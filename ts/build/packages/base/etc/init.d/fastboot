@@ -155,8 +155,25 @@ squash_loc()
 	fi
 }
 
+# Copying lib.squash into /tmp frees the boot medium, but the copy lives in RAM
+# for as long as the client runs. On a 1 GB machine a 400-600 MB squash leaves
+# too little for X and a remote session, so unless MEMORY_CONSTRAINED is set
+# either way, copy only when at least 1.5 GB would remain afterwards.
+squash_fits_in_ram()
+{
+	local mem_kb sq_kb
+	mem_kb=`awk '/^MemTotal:/ {print $2}' /proc/meminfo`
+	sq_kb=`ls -lL "$1" 2>/dev/null | awk '{print int($5 / 1024)}'`
+	[ -n "$mem_kb" ] && [ -n "$sq_kb" ] || return 1
+	[ $(( mem_kb - sq_kb )) -ge 1572864 ]
+}
+
 mount_squash()
 {
+	if [ -z "$MEMORY_CONSTRAINED" ] && [ "$FASTBOOT" != "lotsofmem" ] && ! squash_fits_in_ram "$FILE"; then
+		MEMORY_CONSTRAINED=TRUE
+		echo "MEMORY_CONSTRAINED=TRUE" >> /etc/thinstation.runtime
+	fi
 	if [ "$FASTBOOT" == "lotsofmem" ] ; then
 		/sbin/unsquashfs -f -d / -f $FILE
 		if [ -e /tmp/lib.squash ] ; then

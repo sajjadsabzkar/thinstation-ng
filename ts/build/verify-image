@@ -21,8 +21,9 @@
 #   --require-bin <name>    this binary must be in the image (repeatable)
 #   --keep                  leave the unpacked tree behind and print where
 #
-# conf/<name>/verify is sourced as shell and may set EXPECT_SESSION and
-# REQUIRE_BIN (a space separated list). Options given on the command line win.
+# conf/<name>/verify is sourced as shell and may set EXPECT_SESSION,
+# REQUIRE_BIN (a space separated list) and MAX_SQUASH_KB, the size
+# lib.squash must stay under. Options given on the command line win.
 #
 # Exit status is 0 when every check passed and 1 otherwise. The report goes
 # to stdout either way so that CI can keep it next to the image.
@@ -34,6 +35,7 @@ usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p}' "$0"; exit 2; }
 PROFILE=
 EXPECT_SESSION=
 REQUIRE_BIN=
+MAX_SQUASH_KB=
 ARG_SESSION=
 ARG_BINS=
 KEEP=false
@@ -228,13 +230,23 @@ if [ -n "`echo $REQUIRE_BIN`" ]; then
 	done
 fi
 
-# --- sizes, for the record --------------------------------------------------
+# --- sizes ------------------------------------------------------------------
 
 echo
 echo "sizes:"
 [ -f "$IMAGE" ] && note "image      `du -k "$IMAGE" | cut -f1` KiB"
 note "initrd     `du -k "$INITRD" | cut -f1` KiB"
-[ -s "$SQUASH" ] && note "lib.squash `du -k "$SQUASH" | cut -f1` KiB"
+if [ -s "$SQUASH" ]; then
+	squash_kb=`du -k "$SQUASH" | cut -f1`
+	note "lib.squash $squash_kb KiB"
+	if [ -n "$MAX_SQUASH_KB" ]; then
+		if [ "$squash_kb" -le "$MAX_SQUASH_KB" ]; then
+			pass "lib.squash within $MAX_SQUASH_KB KiB"
+		else
+			fail "lib.squash is $squash_kb KiB, over the $MAX_SQUASH_KB KiB budget"
+		fi
+	fi
+fi
 
 $KEEP && { echo; echo "unpacked tree kept at $WORK"; }
 

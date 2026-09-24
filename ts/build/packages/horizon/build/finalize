@@ -16,7 +16,8 @@ python3 /lib64/omnissa/horizon/urlRedirection/install-url-redirection.py -i
 touch /etc/hosts
 sed -i '1i127.0.0.1 horizon-localhost' /etc/hosts
 
-chmod 755 /lib64/omnissa/horizon/html5mmr/HTML5VideoPlayer /lib64/omnissa/horizon/html5mmr/chrome_100_percent.pak /lib64/omnissa/horizon/html5mmr/chrome_200_percent.pak /lib64/omnissa
+# html5mmr is dropped in build/install.
+chmod 755 /lib64/omnissa
 chmod 755 /lib64/omnissa/horizon/vdpService/webrtcRedir/libwebrtc_sharedlib.so
 
 ln -sf /lib64/omnissa/horizon/usb/horizon-eucusbarbitrator /bin/horizon-eucusbarbitrator

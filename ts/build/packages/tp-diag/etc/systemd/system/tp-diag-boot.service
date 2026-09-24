@@ -1,0 +1,11 @@
+[Unit]
+Description=Diagnostic bundle for this boot
+After=network-online.target tp-registry.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/thinstation.env
+ExecStart=/bin/tp-diag-boot
+Nice=10
+IOSchedulingClass=idle

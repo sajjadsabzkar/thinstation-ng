@@ -1,0 +1,10 @@
+[Unit]
+Description=Send queued diagnostic bundles
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/thinstation.env
+ExecStart=/bin/tp-diag-send
+SuccessExitStatus=1
+Nice=10

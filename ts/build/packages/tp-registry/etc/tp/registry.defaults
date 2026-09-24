@@ -209,7 +209,7 @@ root/ControlPanel/customization/fields/showTaskbar/default=1
 root/ControlPanel/customization/fields/defaultConnection/label=Default connection
 root/ControlPanel/customization/fields/defaultConnection/type=choice
 root/ControlPanel/customization/fields/defaultConnection/key=root/ConnectionManager/defaultConnection
-root/ControlPanel/customization/fields/defaultConnection/choicesCommand=tpreg connections 2>/dev/null
+root/ControlPanel/customization/fields/defaultConnection/choicesCommand=tpreg connections 2>/dev/null | awk '{ u = $1; t = $2; $1 = ""; $2 = ""; sub(/^ +/, ""); printf "%s\t%s (%s)\n", u, $0, t }'
 root/ControlPanel/customization/fields/defaultConnection/hint=Started automatically in zero configuration
 
 # --- Look and Feel (ThinPro: hptc-look-feel, Appearance) -------------------
@@ -458,8 +458,16 @@ root/logging/remote/server=
 root/logging/remote/port=514
 root/logging/remote/facility=16
 
+# Diagnostic bundles (tp-diag): hardware report + every log, sent once per
+# boot and immediately when something fails. Empty server = keep them queued.
+# TP_DIAG_SERVER / TP_DIAG_KEY in thinstation.conf are the fallback, so an
+# image can be built already pointing at the log server.
+root/logging/diag/server=
+root/logging/diag/key=
+root/logging/diag/onBoot=1
+
 root/ControlPanel/logging/title=System Logs
-root/ControlPanel/logging/fields=debugLevel remoteEnabled remoteServer remotePort localLog
+root/ControlPanel/logging/fields=debugLevel remoteEnabled remoteServer remotePort localLog diagServer diagKey diagOnBoot diagQueue diagSendNow
 root/ControlPanel/logging/fields/debugLevel/label=Detail level
 root/ControlPanel/logging/fields/debugLevel/type=choice
 root/ControlPanel/logging/fields/debugLevel/key=root/logging/general/debugLevel
@@ -483,11 +491,42 @@ root/ControlPanel/logging/fields/remotePort/default=514
 root/ControlPanel/logging/fields/localLog/label=Recent local log
 root/ControlPanel/logging/fields/localLog/type=info
 root/ControlPanel/logging/fields/localLog/valueCommand=journalctl -n 1 --no-pager -o short 2>/dev/null || tail -1 /var/log/messages 2>/dev/null
+root/ControlPanel/logging/fields/debugLevel/section=Live Logs
+root/ControlPanel/logging/fields/remoteEnabled/section=Live Logs
+root/ControlPanel/logging/fields/remoteServer/section=Live Logs
+root/ControlPanel/logging/fields/remotePort/section=Live Logs
+root/ControlPanel/logging/fields/localLog/section=Live Logs
+root/ControlPanel/logging/fields/diagServer/label=Log server
+root/ControlPanel/logging/fields/diagServer/type=text
+root/ControlPanel/logging/fields/diagServer/key=root/logging/diag/server
+root/ControlPanel/logging/fields/diagServer/hint=https://logs.example.com - diagnostic bundles are uploaded here
+root/ControlPanel/logging/fields/diagServer/section=Diagnostics
+root/ControlPanel/logging/fields/diagKey/label=Upload key
+root/ControlPanel/logging/fields/diagKey/type=password
+root/ControlPanel/logging/fields/diagKey/key=root/logging/diag/key
+root/ControlPanel/logging/fields/diagKey/section=Diagnostics
+root/ControlPanel/logging/fields/diagOnBoot/label=Send a report after every boot
+root/ControlPanel/logging/fields/diagOnBoot/type=bool
+root/ControlPanel/logging/fields/diagOnBoot/key=root/logging/diag/onBoot
+root/ControlPanel/logging/fields/diagOnBoot/default=1
+root/ControlPanel/logging/fields/diagOnBoot/section=Diagnostics
+root/ControlPanel/logging/fields/diagQueue/label=Waiting to be sent
+root/ControlPanel/logging/fields/diagQueue/type=info
+root/ControlPanel/logging/fields/diagQueue/valueCommand=n=`ls /var/lib/tp/diag/queue/*.tar.gz 2>/dev/null | wc -l`; echo "$n report(s)"
+root/ControlPanel/logging/fields/diagQueue/section=Diagnostics
+root/ControlPanel/logging/fields/diagSendNow/label=Send a full report now
+root/ControlPanel/logging/fields/diagSendNow/type=action
+root/ControlPanel/logging/fields/diagSendNow/command=tp-diag-request manual && echo "Requested. The report is built and sent in the background."
+root/ControlPanel/logging/fields/diagSendNow/buttonText=Send Report
+root/ControlPanel/logging/fields/diagSendNow/section=Diagnostics
 
 # --- Window manager (Appearance) -------------------------------------------
 # Our stand-in for ThinPro's hptc-wm alternatives group, where kwin_x11 sits
 # at priority 60 and openbox at 50.
-root/wm/name=openbox
+# kwin_x11 is the active window manager, as on ThinPro. tp-session drops to
+# openbox by itself when kwin cannot run on the hardware; set this to
+# openbox to use it from the start.
+root/wm/name=kwin
 
 root/ControlPanel/wm/title=Window Manager
 root/ControlPanel/wm/fields=name
@@ -495,7 +534,7 @@ root/ControlPanel/wm/fields/name/label=Window manager
 root/ControlPanel/wm/fields/name/type=choice
 root/ControlPanel/wm/fields/name/key=root/wm/name
 root/ControlPanel/wm/fields/name/choices=openbox|kwin
-root/ControlPanel/wm/fields/name/default=openbox
+root/ControlPanel/wm/fields/name/default=kwin
 root/ControlPanel/wm/fields/name/hint=Takes effect at the next login. kwin needs far more memory.
 
 # ---------------------------------------------------------------------------

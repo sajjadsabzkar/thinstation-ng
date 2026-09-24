@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry sending queued diagnostic bundles
+
+[Timer]
+# Bundles made while the network was down go out once it is back.
+OnBootSec=5min
+OnUnitActiveSec=10min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

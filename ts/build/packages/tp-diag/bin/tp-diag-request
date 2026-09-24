@@ -1,0 +1,16 @@
+#!/bin/sh
+# Asks for an urgent diagnostic bundle. For anything that is not root: the
+# session, tp-launch, the connection manager.
+#
+#   tp-diag-request <reason>
+#
+# Gathering a bundle needs root (the journal, dmesg, other users' logs), so
+# this only drops a request file where tp-diag-trigger.path is watching; the
+# root side does the rest. No sudo, no polkit, nothing to authorise.
+
+DIR=/var/lib/tp/diag/requests
+reason=`printf '%s' "${1:-unspecified}" | tr -c 'A-Za-z0-9._:@-' '_' | cut -c1-80`
+mkdir -p "$DIR" 2>/dev/null
+f="$DIR/`date +%s`.$$.$reason"
+: > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f" 2>/dev/null
+exit 0

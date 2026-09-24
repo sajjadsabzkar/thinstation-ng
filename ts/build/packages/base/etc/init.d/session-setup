@@ -9,6 +9,11 @@ no_package()
 	echo_log -n -d "ERROR: Package $type doesn't exist, aborting bootup. Check your "
 	echo_log -n -d "thinstation.conf file and build.conf file to make sure you have the "
 	echo_log -n -d "package loaded."
+	# The boot stops here for good. Ask for a diagnostic bundle so the
+	# failure reaches the log server instead of only this screen.
+	if [ -x /bin/tp-diag-request ]; then
+		/bin/tp-diag-request "no-package:$type"
+	fi
 	while true; do
 	sleep 10000
 	done

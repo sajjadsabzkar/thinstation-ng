@@ -1,0 +1,7 @@
+[Unit]
+Description=Build urgent diagnostic bundles on request
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/thinstation.env
+ExecStart=/bin/tp-diag-trigger

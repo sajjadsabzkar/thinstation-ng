@@ -1,0 +1,11 @@
+[Unit]
+Description=Send a diagnostic bundle a few minutes after boot
+
+[Timer]
+# Late enough that the session and the autostart connections have come up,
+# or failed to, and that is in the logs.
+OnBootSec=3min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

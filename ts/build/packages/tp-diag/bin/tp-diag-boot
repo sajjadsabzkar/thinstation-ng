@@ -1,0 +1,13 @@
+#!/bin/sh
+# The once-per-boot bundle: sent a few minutes after start-up, when the
+# session and its connections have had time to come up, or fail to.
+# root/logging/diag/onBoot (TP_DIAG_ON_BOOT) turns it off.
+
+. /etc/thinstation.global 2>/dev/null
+
+on=`tpreg get root/logging/diag/onBoot 2>/dev/null`
+[ -n "$on" ] || on="${TP_DIAG_ON_BOOT:-1}"
+case "`echo $on | tr 'A-Z' 'a-z'`" in
+0|off|false|no|disabled) exit 0 ;;
+esac
+exec tp-diag --reason boot

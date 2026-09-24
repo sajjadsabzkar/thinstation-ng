@@ -1,0 +1,8 @@
+[Unit]
+Description=Urgent diagnostic bundle after %i failed
+# Attach to any unit with:  OnFailure=tp-diag@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/thinstation.env
+ExecStart=/bin/sh -c 'exec /bin/tp-diag-request "failed-unit:%i"'

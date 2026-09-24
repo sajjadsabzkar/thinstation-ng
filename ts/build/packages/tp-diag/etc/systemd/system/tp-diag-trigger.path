@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch for urgent diagnostic requests from the session
+
+[Path]
+# tp-diag-request drops a file here; the service turns it into a bundle.
+DirectoryNotEmpty=/var/lib/tp/diag/requests
+MakeDirectory=yes
+DirectoryMode=1733
+
+[Install]
+WantedBy=paths.target

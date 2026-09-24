@@ -1,0 +1,207 @@
+#!/bin/bash
+# Gathers everything this client knows about itself into one bundle, queues
+# it, and hands it to tp-diag-send.
+#
+#   tp-diag [--reason TEXT] [--urgent] [--no-send] [--output FILE]
+#
+# What goes in:
+#
+#   hardware.json/.txt  tp-hwreport: machine, PCI/USB/network/display, and
+#                       the OK/WARN/FAIL compatibility verdicts
+#   meta.json           why this bundle exists and when
+#   boot/               the journal of this boot, its warnings, dmesg, boot
+#                       timing, failed units
+#   session/            X server, xinit and tp-session output, and the
+#                       per-connection logs ThinStation keeps under
+#                       /run/user/<uid>/applications
+#   apps/               the clients' own log directories: Horizon, FreeRDP,
+#                       Firefox crash reports
+#   config/             the registry and the ThinStation config layers,
+#                       with every password, secret, token and key blanked
+#   system/             processes, memory, mounts, disk use
+#
+# The image is read-only and /var is in RAM, so the queue does not survive a
+# reboot. When a bundle is urgent and cannot be sent, a copy is also written
+# to any USB stick that is plugged in.
+#
+# Runs as root: the journal, dmesg and other users' session logs need it.
+# The session asks for a bundle with tp-diag-request instead.
+
+REASON=manual
+URGENT=0
+SEND=1
+OUTPUT=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--reason)	shift; REASON="$1" ;;
+	--urgent)	URGENT=1 ;;
+	--no-send)	SEND=0 ;;
+	--output)	shift; OUTPUT="$1" ;;
+	*)		echo "usage: tp-diag [--reason TEXT] [--urgent] [--no-send] [--output FILE]" >&2; exit 2 ;;
+	esac
+	shift
+done
+
+. /etc/thinstation.global 2>/dev/null
+
+QUEUE=/var/lib/tp/diag/queue
+# One bundle may not be bigger than this; the journal is cut to fit.
+JOURNAL_MAX=$(( 16 * 1024 * 1024 ))
+# The queue as a whole: oldest bundles go first.
+QUEUE_MAX_KB=$(( 64 * 1024 ))
+
+log() { logger -t tp-diag "$*" 2>/dev/null; echo "tp-diag: $*" >&2; }
+
+# Reasons end up in file names and HTTP headers: keep them plain.
+REASON=`printf '%s' "$REASON" | tr -c 'A-Za-z0-9._:@-' '_' | cut -c1-80`
+
+W=`mktemp -d /tmp/tp-diag.XXXXXX` || exit 1
+trap 'rm -rf "$W"' EXIT
+mkdir -p "$W/boot" "$W/session" "$W/apps" "$W/config" "$W/system"
+
+# Blank anything that looks like a credential: NAME=value, NAME: value and
+# "NAME":"value" where the name *ends* in password, passwd, secret, token,
+# credential or key -- so root/keyboard/layout survives and
+# root/logging/diag/key does not. Also FreeRDP's /p: and user:password@ in
+# URLs. A few harmless values (enablePassword=1) get blanked too; that is the
+# right side to err on.
+scrub() {
+	sed -E \
+	    -e 's/([A-Za-z0-9_./-]*(pass(word|wd)?|secret|token|credential|key)"?[[:space:]]*[=:][[:space:]]*"?)[^[:space:]",]+/\1***/Ig' \
+	    -e 's#(/p:)[^[:space:]]+#\1***#g' \
+	    -e 's#(://[^/:@[:space:]]+:)[^@[:space:]]+@#\1***@#g'
+}
+
+# copy SRC DEST-DIR: files only, capped, never following into huge trees.
+copy() {
+	local src="$1" dst="$2"
+	[ -e "$src" ] || return 0
+	mkdir -p "$dst"
+	if [ -d "$src" ]; then
+		find "$src" -maxdepth 3 -type f -size -8M 2>/dev/null | head -200 | while IFS= read -r f; do
+			rel=`echo "$f" | sed 's#^/##; s#/#_#g'`
+			scrub < "$f" > "$dst/$rel" 2>/dev/null
+		done
+	elif [ -f "$src" ]; then
+		rel=`echo "$src" | sed 's#^/##; s#/#_#g'`
+		tail -c 8M "$src" 2>/dev/null | scrub > "$dst/$rel"
+	fi
+}
+
+# --- hardware ---------------------------------------------------------------
+tp-hwreport --json "$W/hardware.json" --text "$W/hardware.txt" 2>"$W/hardware.err"
+device_id=`sed -n 's/.*"device_id":"\([^"]*\)".*/\1/p' "$W/hardware.json" | head -1`
+[ -n "$device_id" ] || device_id=unknown
+host=`hostname 2>/dev/null | tr -d '\n' | tr -c 'A-Za-z0-9.-' '_'`
+
+# --- boot -------------------------------------------------------------------
+journalctl -b --no-pager -o short-iso 2>/dev/null | tail -c $JOURNAL_MAX | scrub > "$W/boot/journal.txt"
+journalctl -b --no-pager -o short-iso -p warning 2>/dev/null | tail -c 4M | scrub > "$W/boot/journal-warnings.txt"
+dmesg 2>/dev/null > "$W/boot/dmesg.txt"
+systemd-analyze 2>/dev/null > "$W/boot/timing.txt"
+systemd-analyze blame 2>/dev/null | head -60 >> "$W/boot/timing.txt"
+systemd-analyze critical-chain 2>/dev/null >> "$W/boot/timing.txt"
+systemctl --failed --no-pager 2>/dev/null > "$W/boot/failed-units.txt"
+cat /proc/cmdline > "$W/boot/cmdline.txt" 2>/dev/null
+for f in /var/log/*.log /var/log/boot* /var/log/fastboot* /var/log/net/*; do
+	copy "$f" "$W/boot"
+done
+
+# --- session ----------------------------------------------------------------
+# ThinStation sends each package's output to /run/user/<uid>/applications:
+# xorg.<pid>, session.<pid> (xinit, and so tp-session and the window
+# manager), and <package>.<pid> for every connection that was started.
+for d in /run/user/*/applications; do
+	copy "$d" "$W/session"
+done
+for f in /home/*/.xsession-errors /root/.xsession-errors /home/*/.local/share/xorg/*.log /var/log/Xorg.*.log; do
+	copy "$f" "$W/session"
+done
+tpreg list root/tmp 2>/dev/null > "$W/session/registry-tmp.txt"
+cat /var/lib/tp/tmp/session-wm > "$W/session/window-manager.txt" 2>/dev/null
+
+# --- applications -----------------------------------------------------------
+# Omnissa Horizon writes its own logs under /tmp/omnissa-<user> (older
+# VMware builds: /tmp/vmware-<user>) and in the user's profile.
+for d in /tmp/omnissa-* /tmp/vmware-* /home/*/.omnissa /home/*/.vmware; do
+	copy "$d" "$W/apps/horizon"
+done
+for d in /home/*/.config/freerdp; do
+	copy "$d" "$W/apps/freerdp"
+done
+# Firefox crash reports: the .extra files say what crashed; the minidumps
+# themselves are large and useless without symbols.
+find /home/*/.mozilla/firefox -path '*Crash Reports*' -name '*.extra' 2>/dev/null | head -20 | while IFS= read -r f; do
+	copy "$f" "$W/apps/firefox"
+done
+
+# --- configuration ----------------------------------------------------------
+tpreg dump 2>/dev/null | scrub > "$W/config/registry.txt"
+for f in /etc/thinstation.defaults /thinstation.buildtime /etc/thinstation.runtime \
+	 /etc/thinstation.network /etc/thinstation.user /etc/thinstation.packages.list \
+	 /etc/thinstation-release /etc/os-release; do
+	copy "$f" "$W/config"
+done
+
+# --- system -----------------------------------------------------------------
+ps -eo pid,ppid,user,rss,vsz,etime,stat,args 2>/dev/null > "$W/system/processes.txt" \
+	|| ps > "$W/system/processes.txt" 2>/dev/null
+cat /proc/meminfo > "$W/system/meminfo.txt" 2>/dev/null
+free -m >> "$W/system/meminfo.txt" 2>/dev/null
+cat /proc/mounts > "$W/system/mounts.txt" 2>/dev/null
+df -h > "$W/system/df.txt" 2>/dev/null
+lsmod > "$W/system/modules.txt" 2>/dev/null || cat /proc/modules > "$W/system/modules.txt"
+cat /proc/asound/cards > "$W/system/asound.txt" 2>/dev/null
+ls -l /sys/class/drm/ > "$W/system/drm.txt" 2>/dev/null
+
+# --- meta -------------------------------------------------------------------
+now=`date -u +%Y%m%dT%H%M%SZ`
+cat > "$W/meta.json" <<META
+{"schema":1,"created":"$now","device_id":"$device_id","hostname":"$host","reason":"$REASON","urgent":$([ $URGENT = 1 ] && echo true || echo false),"uptime":"`cut -d' ' -f1 /proc/uptime`"}
+META
+
+# --- pack -------------------------------------------------------------------
+name="${now}_${device_id}_${REASON}.tar.gz"
+if [ -n "$OUTPUT" ]; then
+	target="$OUTPUT"
+else
+	mkdir -p "$QUEUE"
+	# Only the queue is private. Its parent also holds requests/, which
+	# the session user has to be able to reach.
+	chmod 0700 "$QUEUE" 2>/dev/null
+	target="$QUEUE/$name"
+fi
+if ! tar -C "$W" -czf "$target.part" . 2>/dev/null; then
+	log "could not write $target"
+	rm -f "$target.part"
+	exit 1
+fi
+mv "$target.part" "$target"
+log "bundle $name (`du -k "$target" | cut -f1` KiB, reason $REASON)"
+
+[ -n "$OUTPUT" ] && exit 0
+
+# Keep the queue from eating the RAM disk: drop the oldest until it fits.
+while [ "`du -sk $QUEUE | cut -f1`" -gt $QUEUE_MAX_KB ]; do
+	oldest=`ls -1tr $QUEUE/*.tar.gz 2>/dev/null | head -1`
+	[ -n "$oldest" ] && [ "$oldest" != "$target" ] || break
+	log "queue full, dropping `basename $oldest`"
+	rm -f "$oldest"
+done
+
+sent=1
+if [ $SEND = 1 ]; then
+	tp-diag-send && sent=0
+fi
+
+# Something went wrong and nothing could be sent: put a copy where a person
+# can pick it up. ThinStation mounts USB storage under /mnt/usbdevice.
+if [ $URGENT = 1 ] && [ $sent != 0 ] && [ -e "$target" ]; then
+	for m in /mnt/usbdevice/* /media/*; do
+		[ -d "$m" ] && [ -w "$m" ] || continue
+		mountpoint -q "$m" 2>/dev/null || continue
+		mkdir -p "$m/thinpro-logs" 2>/dev/null && cp "$target" "$m/thinpro-logs/" 2>/dev/null \
+			&& { log "copied to $m/thinpro-logs"; sync; break; }
+	done
+fi
+exit 0

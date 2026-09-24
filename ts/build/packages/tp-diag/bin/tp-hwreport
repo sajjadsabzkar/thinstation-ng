@@ -1,0 +1,341 @@
+#!/bin/bash
+# Describes this machine: what it is, what is in it, and how well this image
+# gets on with it.
+#
+#   tp-hwreport [--json FILE] [--text FILE]
+#
+# Written for the hardware compatibility table on the log server: every boot
+# of every unit adds a row, so over time the server knows which models, which
+# graphics chips and which network cards work, and which do not.
+#
+# Everything is read from /sys and /proc rather than from dmidecode, ip or
+# ethtool. Those are not in the image, and on the odd old board this is
+# meant for, /sys is also the one source that is always there. PCI and USB
+# ids are reported as numbers; the server names them from pci.ids and
+# usb.ids, which keeps several megabytes of id databases out of the image.
+#
+# Each check ends up OK, WARN or FAIL, the same three states ThinPro's
+# Compatibility Check shows, plus INFO for facts that are not a verdict.
+
+JSON=
+TEXT=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--json)	shift; JSON="$1" ;;
+	--text)	shift; TEXT="$1" ;;
+	*)	echo "usage: tp-hwreport [--json FILE] [--text FILE]" >&2; exit 2 ;;
+	esac
+	shift
+done
+[ -n "$JSON" ] || JSON=/dev/stdout
+
+# First line of a sysfs file, NULs and trailing blanks removed.
+rd() { [ -r "$1" ] && tr -d '\000' < "$1" 2>/dev/null | head -c 4096 | head -1 | sed 's/[[:space:]]*$//'; }
+
+# JSON string escaping for values read off hardware, which may contain
+# anything: quotes, backslashes, control characters, several lines.
+js() {
+	printf '"'
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' \
+		| tr -d '\000-\010\013\014\016-\037' \
+		| awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }'
+	printf '"'
+}
+
+TMPTEXT=`mktemp /tmp/tp-hwreport.XXXXXX`
+trap 'rm -f "$TMPTEXT" "$TMPTEXT".*' EXIT
+
+CHECKS=
+check() {	# name status detail
+	[ -n "$CHECKS" ] && CHECKS="$CHECKS,"
+	CHECKS="$CHECKS{\"name\":`js "$1"`,\"status\":`js "$2"`,\"detail\":`js "$3"`}"
+	printf '%-16s %-5s %s\n' "$1" "$2" "$3" >> "$TMPTEXT.checks"
+}
+
+# --- identity ---------------------------------------------------------------
+D=/sys/class/dmi/id
+sys_vendor=`rd $D/sys_vendor`
+product_name=`rd $D/product_name`
+product_version=`rd $D/product_version`
+product_serial=`rd $D/product_serial`
+board_vendor=`rd $D/board_vendor`
+board_name=`rd $D/board_name`
+bios_vendor=`rd $D/bios_vendor`
+bios_version=`rd $D/bios_version`
+bios_date=`rd $D/bios_date`
+chassis_type=`rd $D/chassis_type`
+
+# The first wired MAC, else any; with the serial it names the unit. Neither
+# alone is enough: serials read "To be filled by O.E.M." on many old boards,
+# and a MAC changes with a USB network adapter.
+mac=
+for n in /sys/class/net/*; do
+	[ -e "$n/device" ] || continue
+	case "`basename $n`" in wl*|ww*) continue ;; esac
+	mac=`rd $n/address`
+	[ -n "$mac" ] && break
+done
+[ -n "$mac" ] || mac=`cat /sys/class/net/*/address 2>/dev/null | grep -v '^00:00:00' | head -1`
+device_id=`printf '%s|%s|%s' "$sys_vendor" "$product_serial" "$mac" | sha256sum | cut -c1-16`
+hostname=`hostname 2>/dev/null`
+
+# --- image and boot ---------------------------------------------------------
+kernel=`uname -r`
+arch=`uname -m`
+if [ -d /sys/firmware/efi ]; then boot_mode=uefi; else boot_mode=bios; fi
+image_release=`head -1 /etc/thinstation-release 2>/dev/null`
+# The build stamps every file in the image with the build date.
+image_build=`date -r /etc/thinstation.defaults +%Y-%m-%dT%H:%M 2>/dev/null`
+wm_name=`tpreg get root/wm/name 2>/dev/null`
+boot_seconds=`systemd-analyze 2>/dev/null | sed -n 's/.*= *\([0-9.]*\)s$/\1/p' | head -1`
+uptime_s=`cut -d. -f1 /proc/uptime`
+
+# --- CPU and memory ---------------------------------------------------------
+cpu_model=`sed -n 's/^model name[[:space:]]*: *//p' /proc/cpuinfo | head -1`
+cpu_threads=`grep -c '^processor' /proc/cpuinfo`
+cpu_flags=`sed -n 's/^flags[[:space:]]*: *//p' /proc/cpuinfo | head -1`
+has_flag() { case " $cpu_flags " in *" $1 "*) echo true ;; *) echo false ;; esac; }
+lm=`has_flag lm`
+pae=`has_flag pae`
+sse2=`has_flag sse2`
+mem_kb=`sed -n 's/^MemTotal: *\([0-9]*\).*/\1/p' /proc/meminfo`
+avail_kb=`sed -n 's/^MemAvailable: *\([0-9]*\).*/\1/p' /proc/meminfo`
+
+# --- PCI --------------------------------------------------------------------
+PCI=
+unclaimed=
+for d in /sys/bus/pci/devices/*; do
+	[ -e "$d/vendor" ] || continue
+	slot=`basename $d`
+	vendor=`rd $d/vendor | sed 's/^0x//'`
+	device=`rd $d/device | sed 's/^0x//'`
+	subv=`rd $d/subsystem_vendor | sed 's/^0x//'`
+	subd=`rd $d/subsystem_device | sed 's/^0x//'`
+	class=`rd $d/class | sed 's/^0x//' | cut -c1-4`
+	driver=
+	[ -L $d/driver ] && driver=`basename "\`readlink $d/driver\`"`
+	[ -n "$PCI" ] && PCI="$PCI,"
+	PCI="$PCI{\"slot\":`js $slot`,\"class\":`js $class`,\"vendor\":`js $vendor`,\"device\":`js $device`,\"subsystem\":`js "$subv:$subd"`,\"driver\":`js "$driver"`}"
+	printf '%s  class %s  %s:%s  (sub %s:%s)  driver=%s\n' $slot $class $vendor $device "$subv" "$subd" "${driver:--}" >> "$TMPTEXT.pci"
+	# The devices that decide whether a thin client is usable, left
+	# without a driver.
+	if [ -z "$driver" ]; then
+		case $class in
+		03*)	unclaimed="$unclaimed display:$vendor:$device" ;;
+		02*)	unclaimed="$unclaimed network:$vendor:$device" ;;
+		0403)	unclaimed="$unclaimed audio:$vendor:$device" ;;
+		0c03)	unclaimed="$unclaimed usb-controller:$vendor:$device" ;;
+		esac
+	fi
+done
+
+# --- USB --------------------------------------------------------------------
+USB=
+for d in /sys/bus/usb/devices/*; do
+	[ -e "$d/idVendor" ] || continue
+	v=`rd $d/idVendor`
+	p=`rd $d/idProduct`
+	[ "$v" = 1d6b ] && continue	# the root hubs themselves
+	name="`rd $d/manufacturer` `rd $d/product`"
+	drivers=`for i in $d/*:*; do [ -L $i/driver ] && basename "\`readlink $i/driver\`"; done 2>/dev/null | sort -u | tr '\n' ' ' | sed 's/ $//'`
+	[ -n "$USB" ] && USB="$USB,"
+	USB="$USB{\"vendor\":`js $v`,\"product\":`js $p`,\"name\":`js "$name"`,\"class\":`js "\`rd $d/bDeviceClass\`"`,\"drivers\":`js "$drivers"`}"
+	printf '%s:%s  %s  drivers=%s\n' $v $p "$name" "${drivers:--}" >> "$TMPTEXT.usb"
+done
+
+# --- network ----------------------------------------------------------------
+NET=
+link_up=0
+for n in /sys/class/net/*; do
+	[ -e "$n/device" ] || continue
+	ifc=`basename $n`
+	drv=
+	[ -L $n/device/driver ] && drv=`basename "\`readlink $n/device/driver\`"`
+	state=`rd $n/operstate`
+	speed=`rd $n/speed 2>/dev/null`
+	case "$speed" in -*) speed= ;; esac
+	ipv4=
+	if command -v ip >/dev/null 2>&1; then
+		ipv4=`ip -4 -o addr show dev $ifc 2>/dev/null | awk '{ print $4 }' | head -1`
+	elif command -v ifconfig >/dev/null 2>&1; then
+		ipv4=`ifconfig $ifc 2>/dev/null | sed -n 's/.*inet \(addr:\)\{0,1\}\([0-9.]*\).*/\2/p' | head -1`
+	fi
+	[ "$state" = up ] && link_up=1
+	[ -n "$NET" ] && NET="$NET,"
+	NET="$NET{\"iface\":`js $ifc`,\"mac\":`js "\`rd $n/address\`"`,\"driver\":`js "$drv"`,\"state\":`js "$state"`,\"speed_mbps\":`js "$speed"`,\"ipv4\":`js "$ipv4"`}"
+	printf '%-10s %-17s driver=%-10s %-5s %s Mb/s  %s\n' $ifc "`rd $n/address`" "${drv:--}" "$state" "${speed:-?}" "${ipv4:--}" >> "$TMPTEXT.net"
+done
+
+# --- graphics ---------------------------------------------------------------
+# Connectors straight from DRM. This needs neither X nor its Xauthority, so
+# it works as root from a systemd unit and also when X never came up.
+edid_mfg() {	# EDID bytes 8-9: three 5-bit letters, the manufacturer id
+	local hex v
+	hex=`od -An -tx1 -j8 -N2 "$1" 2>/dev/null | tr -d ' \n'`
+	[ -n "$hex" ] || return
+	v=$(( 16#$hex ))
+	printf "\\$(printf %o $(( ((v >> 10) & 31) + 64 )))\\$(printf %o $(( ((v >> 5) & 31) + 64 )))\\$(printf %o $(( (v & 31) + 64 )))"
+}
+edid_name() {	# the 18-byte descriptor tagged 0xfc holds the monitor name
+	local off tag
+	for off in 54 72 90 108; do
+		tag=`od -An -tx1 -j$(( off + 3 )) -N1 "$1" 2>/dev/null | tr -d ' \n'`
+		if [ "$tag" = fc ]; then
+			dd if="$1" bs=1 skip=$(( off + 5 )) count=13 2>/dev/null | tr -d '\000' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+			return
+		fi
+	done
+}
+OUT=
+for c in /sys/class/drm/card*-*; do
+	[ -e "$c/status" ] || continue
+	name=`basename $c | sed 's/^card[0-9]*-//'`
+	status=`rd $c/status`
+	mode=`head -1 $c/modes 2>/dev/null`
+	monitor=
+	# sysfs reports binary attributes as size 0, so test for the EDID
+	# header itself rather than with [ -s ].
+	if [ "`od -An -tx1 -N8 $c/edid 2>/dev/null | tr -d ' \n'`" = 00ffffffffffff00 ]; then
+		monitor="`edid_mfg $c/edid` `edid_name $c/edid`"
+		monitor=`echo $monitor`
+	fi
+	[ -n "$OUT" ] && OUT="$OUT,"
+	OUT="$OUT{\"connector\":`js $name`,\"status\":`js $status`,\"preferred_mode\":`js "$mode"`,\"monitor\":`js "$monitor"`}"
+	printf '%-12s %-13s %-11s %s\n' $name $status "${mode:--}" "${monitor:--}" >> "$TMPTEXT.drm"
+done
+
+# Which X driver actually ran, from the newest Xorg log there is.
+xlog=`ls -t /run/user/*/applications/xorg.* /home/*/.local/share/xorg/Xorg.0.log /var/log/Xorg.0.log 2>/dev/null | head -1`
+xorg_driver=
+if [ -n "$xlog" ]; then
+	xorg_driver=`sed -n 's/.*(II) \([A-Za-z_]*\)([0-9]*): .*/\1/p' "$xlog" \
+		| grep -vE '^(Loading|LoadModule|Module|xfree86|Initializing|GLX|AIGLX)$' | head -1`
+fi
+x_up=false
+if pidof Xorg >/dev/null 2>&1 || pidof X >/dev/null 2>&1; then
+	x_up=true
+fi
+
+# --- audio, firmware --------------------------------------------------------
+# " 0 [PCH            ]: HDA-Intel - HDA Intel PCH"  ->  "PCH: HDA Intel PCH"
+audio_cards=`sed -n 's/^ *[0-9]* \[\([^] ]*\) *\]: .* - \(.*\)/\1: \2/p' /proc/asound/cards 2>/dev/null | sed 's/[[:space:]]*$//'`
+missing_fw=`dmesg 2>/dev/null | grep -iE 'firmware: failed|Direct firmware load for .* failed|firmware.*not found|failed to load firmware' \
+	| sed 's/^\[[^]]*\] *//' | sort -u | head -20`
+
+# --- verdicts ---------------------------------------------------------------
+if [ "$lm" = true ]; then
+	check cpu OK "$cpu_model, 64-bit"
+else
+	check cpu WARN "$cpu_model, no 64-bit support (lm flag missing)"
+fi
+
+mem_mb=$(( ${mem_kb:-0} / 1024 ))
+if   [ $mem_mb -lt 700 ];  then check memory FAIL "${mem_mb} MiB installed"
+elif [ $mem_mb -lt 1000 ]; then check memory WARN "${mem_mb} MiB installed"
+else                            check memory OK "${mem_mb} MiB installed"
+fi
+check memory-free INFO "$(( ${avail_kb:-0} / 1024 )) MiB available now"
+
+gpu_unclaimed=`echo $unclaimed | tr ' ' '\n' | grep '^display:' | tr '\n' ' '`
+if [ "$x_up" != true ]; then
+	check graphics FAIL "X is not running${xorg_driver:+ (last driver: $xorg_driver)}"
+elif [ -n "$gpu_unclaimed" ] || [ "$xorg_driver" = vesa ] || [ "$xorg_driver" = fbdev ]; then
+	check graphics WARN "X runs on ${xorg_driver:-an unknown driver}; no native driver for ${gpu_unclaimed:-the display chip}"
+else
+	check graphics OK "X driver ${xorg_driver:-unknown}"
+fi
+
+# tp-session records which window manager actually ran, and why, if it is
+# not the one that was asked for.
+WMSTATE=/var/lib/tp/tmp/session-wm
+wm_ran=`sed -n 's/^running=//p' $WMSTATE 2>/dev/null`
+wm_why=`sed -n 's/^fallback_reason=//p' $WMSTATE 2>/dev/null`
+if [ -n "$wm_why" ]; then
+	check window-manager WARN "fell back to ${wm_ran:-openbox}: $wm_why"
+elif [ -n "$wm_ran" ]; then
+	check window-manager OK "$wm_ran"
+else
+	check window-manager INFO "configured: ${wm_name:-unknown}"
+fi
+
+net_unclaimed=`echo $unclaimed | tr ' ' '\n' | grep '^network:' | tr '\n' ' '`
+if [ -n "$net_unclaimed" ]; then
+	check network WARN "no driver for $net_unclaimed"
+elif [ $link_up = 1 ]; then
+	check network OK "link up"
+else
+	check network FAIL "no network interface is up"
+fi
+
+if [ -n "$audio_cards" ]; then
+	check audio OK "`echo "$audio_cards" | head -1`"
+else
+	check audio WARN "no sound card found"
+fi
+
+if [ -n "$missing_fw" ]; then
+	check firmware WARN "`echo "$missing_fw" | wc -l` firmware file(s) missing"
+else
+	check firmware OK "nothing missing"
+fi
+
+check boot-mode INFO "$boot_mode"
+[ -n "$boot_seconds" ] && check boot-time INFO "${boot_seconds}s to boot"
+
+# --- write ------------------------------------------------------------------
+lines_json() {
+	printf '%s\n' "$1" | awk 'NF' | while IFS= read -r l; do printf '%s,' "`js "$l"`"; done | sed 's/,$//'
+}
+
+{
+	printf '{"schema":1,"generated":%s,' "`js "$(date -u +%Y-%m-%dT%H:%M:%SZ)"`"
+	printf '"device_id":%s,"hostname":%s,' "`js $device_id`" "`js "$hostname"`"
+	printf '"image":{"release":%s,"build":%s,"kernel":%s,"arch":%s,"wm":%s},' \
+		"`js "$image_release"`" "`js "$image_build"`" "`js $kernel`" "`js $arch`" "`js "$wm_name"`"
+	printf '"boot":{"mode":%s,"seconds":%s,"uptime":%s},' "`js $boot_mode`" "`js "$boot_seconds"`" "`js "$uptime_s"`"
+	printf '"dmi":{"sys_vendor":%s,"product_name":%s,"product_version":%s,"product_serial":%s,' \
+		"`js "$sys_vendor"`" "`js "$product_name"`" "`js "$product_version"`" "`js "$product_serial"`"
+	printf '"board_vendor":%s,"board_name":%s,"bios_vendor":%s,"bios_version":%s,"bios_date":%s,"chassis_type":%s},' \
+		"`js "$board_vendor"`" "`js "$board_name"`" "`js "$bios_vendor"`" "`js "$bios_version"`" "`js "$bios_date"`" "`js "$chassis_type"`"
+	printf '"cpu":{"model":%s,"threads":%s,"lm":%s,"pae":%s,"sse2":%s},' "`js "$cpu_model"`" "${cpu_threads:-0}" $lm $pae $sse2
+	printf '"memory":{"total_kb":%s,"available_kb":%s},' "${mem_kb:-0}" "${avail_kb:-0}"
+	printf '"pci":[%s],"usb":[%s],"net":[%s],' "$PCI" "$USB" "$NET"
+	printf '"graphics":{"x_running":%s,"xorg_driver":%s,"connectors":[%s]},' $x_up "`js "$xorg_driver"`" "$OUT"
+	printf '"audio":[%s],"missing_firmware":[%s],"unclaimed":[%s],' \
+		"`lines_json "$audio_cards"`" "`lines_json "$missing_fw"`" "`lines_json "$(echo $unclaimed | tr ' ' '\n')"`"
+	printf '"checks":[%s]}\n' "$CHECKS"
+} > "$JSON"
+
+if [ -n "$TEXT" ]; then
+	{
+		echo "Hardware report for $hostname ($device_id), `date`"
+		echo
+		echo "== Compatibility =="
+		cat "$TMPTEXT.checks" 2>/dev/null
+		echo
+		echo "== Machine =="
+		echo "Vendor:  $sys_vendor"
+		echo "Model:   $product_name $product_version"
+		echo "Serial:  $product_serial"
+		echo "Board:   $board_vendor $board_name"
+		echo "BIOS:    $bios_vendor $bios_version ($bios_date), boot mode $boot_mode"
+		echo "CPU:     $cpu_model, $cpu_threads threads, 64-bit=$lm pae=$pae sse2=$sse2"
+		echo "Memory:  ${mem_mb} MiB"
+		echo "Image:   $image_release, built $image_build, kernel $kernel ($arch), wm ${wm_name:-?}"
+		echo; echo "== PCI ==";			cat "$TMPTEXT.pci" 2>/dev/null
+		echo; echo "== USB ==";			cat "$TMPTEXT.usb" 2>/dev/null
+		echo; echo "== Network ==";		cat "$TMPTEXT.net" 2>/dev/null
+		echo; echo "== Display connectors ==";	cat "$TMPTEXT.drm" 2>/dev/null
+		echo "X running: $x_up, driver: ${xorg_driver:-unknown}, log: ${xlog:-none}"
+		echo; echo "== Audio ==";		echo "${audio_cards:-none}"
+		echo; echo "== Missing firmware ==";	echo "${missing_fw:-none}"
+		echo; echo "== Loaded modules =="
+		cut -d' ' -f1 /proc/modules 2>/dev/null | sort | tr '\n' ' '
+		echo
+		echo; echo "== lspci -nnk =="
+		lspci -nnk 2>/dev/null || echo "(lspci not available)"
+		echo; echo "== lsusb =="
+		lsusb 2>/dev/null || echo "(lsusb not available)"
+	} > "$TEXT"
+fi
+exit 0

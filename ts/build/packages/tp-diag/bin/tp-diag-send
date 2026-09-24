@@ -1,0 +1,73 @@
+#!/bin/bash
+# Uploads the queued diagnostic bundles, oldest first, and deletes each one
+# the server accepted. Anything that fails stays queued for the next try;
+# tp-diag-send.timer comes back every ten minutes.
+#
+# Where to, in order of precedence:
+#
+#   root/logging/diag/server   registry (control panel)
+#   TP_DIAG_SERVER             thinstation.conf, e.g. baked in at build time
+#
+# and the same for the upload key (root/logging/diag/key, TP_DIAG_KEY). The
+# server is https://host[:port]; bundles are POSTed raw to /api/v1/bundles
+# with the key as a bearer token, so either curl or wget can do it.
+#
+# Exit status: 0 when the queue is empty afterwards.
+
+. /etc/thinstation.global 2>/dev/null
+
+QUEUE=/var/lib/tp/diag/queue
+log() { logger -t tp-diag-send "$*" 2>/dev/null; }
+
+SERVER=`tpreg get root/logging/diag/server 2>/dev/null`
+[ -n "$SERVER" ] || SERVER="$TP_DIAG_SERVER"
+KEY=`tpreg get root/logging/diag/key 2>/dev/null`
+[ -n "$KEY" ] || KEY="$TP_DIAG_KEY"
+SERVER="${SERVER%/}"
+
+ls $QUEUE/*.tar.gz >/dev/null 2>&1 || exit 0
+if [ -z "$SERVER" ]; then
+	log "no server configured; bundles stay in $QUEUE"
+	exit 1
+fi
+
+# One sender at a time: the timer, a boot bundle and a crash bundle can all
+# land at once.
+exec 9>/var/lib/tp/diag/.send.lock
+flock -n 9 || exit 1
+
+upload() {	# file -> 0 on HTTP 2xx
+	local f="$1" meta reason
+	reason=`basename "$f" .tar.gz | cut -d_ -f3-`
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsS --max-time 300 --connect-timeout 20 \
+			-H "Authorization: Bearer $KEY" \
+			-H "Content-Type: application/gzip" \
+			-H "X-TP-Reason: $reason" \
+			-H "X-TP-Filename: `basename "$f"`" \
+			--data-binary @"$f" \
+			"$SERVER/api/v1/bundles" >/dev/null
+	else
+		wget -q -O /dev/null -T 300 \
+			--header="Authorization: Bearer $KEY" \
+			--header="Content-Type: application/gzip" \
+			--header="X-TP-Reason: $reason" \
+			--header="X-TP-Filename: `basename "$f"`" \
+			--post-file="$f" \
+			"$SERVER/api/v1/bundles"
+	fi
+}
+
+failed=0
+for f in `ls -1tr $QUEUE/*.tar.gz 2>/dev/null`; do
+	if upload "$f"; then
+		log "sent `basename $f`"
+		rm -f "$f"
+	else
+		log "could not send `basename $f` to $SERVER; will retry"
+		failed=1
+		# The network or the server is down; the rest would fail too.
+		break
+	fi
+done
+exit $failed

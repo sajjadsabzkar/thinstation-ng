@@ -1,0 +1,34 @@
+#!/bin/bash
+# Serves the requests tp-diag-request leaves behind: one urgent bundle per
+# request, but at most one per reason every ten minutes. A connection that
+# fails and reconnects every few seconds must not bury the server, or the
+# RAM disk, in identical bundles.
+
+DIR=/var/lib/tp/diag/requests
+STATE=/var/lib/tp/diag/last
+WINDOW=600
+
+mkdir -p "$STATE"
+for f in `ls -1tr "$DIR" 2>/dev/null`; do
+	case "$f" in *.tmp) continue ;; esac
+	reason=`echo "$f" | cut -d. -f3-`
+	rm -f "$DIR/$f"
+	[ -n "$reason" ] || continue
+
+	now=`date +%s`
+	# And no more than six urgent bundles an hour in all, whatever the
+	# reasons: the request directory is writable by the session user.
+	recent=`find "$STATE" -type f -mmin -60 2>/dev/null | wc -l`
+	if [ $recent -ge 6 ]; then
+		logger -t tp-diag "skipping $reason: six urgent bundles in the last hour" 2>/dev/null
+		continue
+	fi
+	last=`cat "$STATE/$reason" 2>/dev/null || echo 0`
+	if [ $(( now - last )) -lt $WINDOW ]; then
+		logger -t tp-diag "skipping $reason: one was sent $(( now - last ))s ago" 2>/dev/null
+		continue
+	fi
+	echo $now > "$STATE/$reason"
+	tp-diag --urgent --reason "$reason"
+done
+exit 0

@@ -1,0 +1,4 @@
+#tp-diag 41
+systemctl enable tp-diag-boot.timer
+systemctl enable tp-diag-send.timer
+systemctl enable tp-diag-trigger.path

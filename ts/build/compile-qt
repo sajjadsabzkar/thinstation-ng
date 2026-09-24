@@ -1,0 +1,64 @@
+#!/bin/bash
+# Compiles every Qt program under packages/*/build/*/*.pro and installs the
+# result as packages/<pkg>/bin/<TARGET>, which is where the build picks it up.
+#
+# The image carries whatever sits in bin/, whether or not it matches the
+# source next to it, and nothing in the build checks. Compiling here, from
+# the tree being built, is how the two are kept together.
+#
+# Needs qmake for Qt 5, a C++ compiler and make -- on Fedora,
+#   dnf install qt5-qtbase-devel gcc-c++ make
+# Build against the same Fedora release as the chroot (42) so the binaries
+# link against the Qt that qt5-min puts in the image.
+#
+# Usage: compile-qt [package...]      default: every package with a .pro
+
+HERE=`cd "\`dirname "$0"\`" && pwd`
+PKGDIR=$HERE/packages
+
+QMAKE=
+for q in qmake-qt5 qmake; do
+	if command -v $q >/dev/null 2>&1; then QMAKE=$q; break; fi
+done
+[ -n "$QMAKE" ] || { echo "compile-qt: no qmake-qt5 or qmake on PATH" >&2; exit 2; }
+
+if [ $# -gt 0 ]; then
+	pros=
+	for p in "$@"; do
+		[ -d "$PKGDIR/$p" ] || { echo "compile-qt: no package $p" >&2; exit 2; }
+		pros="$pros `ls $PKGDIR/$p/build/*/*.pro 2>/dev/null`"
+	done
+else
+	pros=`ls $PKGDIR/*/build/*/*.pro 2>/dev/null`
+fi
+[ -n "`echo $pros`" ] || { echo "compile-qt: nothing to compile" >&2; exit 2; }
+
+WORK=`mktemp -d "${TMPDIR:-/tmp}/compile-qt.XXXXXX"`
+trap 'rm -rf "$WORK"' EXIT
+
+jobs=`nproc 2>/dev/null || echo 2`
+failed=0
+
+for pro in $pros; do
+	pkg=`echo "$pro" | sed "s|^$PKGDIR/||; s|/.*||"`
+	target=`sed -n 's/^[[:space:]]*TARGET[[:space:]]*=[[:space:]]*//p' "$pro" | tail -1`
+	[ -n "$target" ] || target=`basename "$pro" .pro`
+
+	# Out of the source tree, so a compile leaves no Makefile or .o behind
+	# for git to notice. The .pro files refer to their siblings by $$PWD.
+	out=$WORK/$pkg-$target
+	mkdir -p "$out"
+	printf '%-18s %-16s ' "$pkg" "$target"
+	if ( cd "$out" && $QMAKE "$pro" >log 2>&1 && make -j$jobs >>log 2>&1 ); then
+		strip "$out/$target" 2>/dev/null
+		mkdir -p "$PKGDIR/$pkg/bin"
+		install -m 0755 "$out/$target" "$PKGDIR/$pkg/bin/$target"
+		echo "ok  `du -k "$PKGDIR/$pkg/bin/$target" | cut -f1` KiB"
+	else
+		echo "FAILED"
+		tail -25 "$out/log" | sed 's/^/    /'
+		failed=$((failed + 1))
+	fi
+done
+
+[ $failed -eq 0 ] || { echo "compile-qt: $failed program(s) failed" >&2; exit 1; }

@@ -1,0 +1,11 @@
+# Expectations for ts/build/verify-image --profile thinpro.
+#
+# The session this profile boots into, and the binaries without which it
+# boots to a bare root window or not at all. tp-session starts the rest; it
+# checks for each with `which` and quietly skips what is missing, so an image
+# without tp-taskbar still boots and simply has no taskbar -- which is why
+# they are listed here rather than trusted to fail loudly at runtime.
+
+EXPECT_SESSION=openbox
+
+REQUIRE_BIN="openbox tp-session tpreg tp-connmgr tp-controlpanel tp-panel tp-taskbar tp-wizard xsetroot"

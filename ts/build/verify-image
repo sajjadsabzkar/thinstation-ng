@@ -1,0 +1,247 @@
+#!/bin/bash
+# Checks a finished image for the mistakes that a successful build does not
+# catch. Both of these shipped in real images before anyone looked inside:
+#
+#   * The session that boots is not the one the profile asked for. build.conf
+#     names the runtime defaults with `param defaultconfig`, which is relative
+#     to ts/build rather than to the profile, so a bare filename silently
+#     picks up ThinStation's stock file instead.
+#
+#   * A session type has no /etc/init.d/<type>. session-setup refuses to start
+#     it, falls into no_package, prints "check your thinstation.conf file and
+#     build.conf file" and then sleeps forever. The build never notices.
+#
+# Usage: verify-image [options] <image.iso | directory>
+#
+#   A directory is taken to hold boot/initrd and, for fastboot images,
+#   boot/lib.squash -- the same layout as the ISO.
+#
+#   --profile <name>        read expectations from conf/<name>/verify
+#   --expect-session <type> SESSION_0_TYPE must be this
+#   --require-bin <name>    this binary must be in the image (repeatable)
+#   --keep                  leave the unpacked tree behind and print where
+#
+# conf/<name>/verify is sourced as shell and may set EXPECT_SESSION and
+# REQUIRE_BIN (a space separated list). Options given on the command line win.
+#
+# Exit status is 0 when every check passed and 1 otherwise. The report goes
+# to stdout either way so that CI can keep it next to the image.
+
+HERE=`cd "\`dirname "$0"\`" && pwd`
+
+usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p}' "$0"; exit 2; }
+
+PROFILE=
+EXPECT_SESSION=
+REQUIRE_BIN=
+ARG_SESSION=
+ARG_BINS=
+KEEP=false
+IMAGE=
+
+while [ -n "$1" ]; do
+	case $1 in
+	--profile)		shift; PROFILE=$1 ;;
+	--expect-session)	shift; ARG_SESSION=$1 ;;
+	--require-bin)		shift; ARG_BINS="$ARG_BINS $1" ;;
+	--keep)			KEEP=true ;;
+	-h|--help)		usage ;;
+	-*)			echo "unknown option: $1" >&2; usage ;;
+	*)			IMAGE=$1 ;;
+	esac
+	shift
+done
+
+[ -n "$IMAGE" ] || usage
+[ -e "$IMAGE" ] || { echo "no such image: $IMAGE" >&2; exit 2; }
+
+if [ -n "$PROFILE" ]; then
+	if [ -e "$HERE/conf/$PROFILE/verify" ]; then
+		. "$HERE/conf/$PROFILE/verify"
+	fi
+fi
+[ -n "$ARG_SESSION" ] && EXPECT_SESSION=$ARG_SESSION
+[ -n "$ARG_BINS" ] && REQUIRE_BIN="$REQUIRE_BIN $ARG_BINS"
+
+failures=0
+pass() { printf '  ok    %s\n' "$*"; }
+fail() { printf '  FAIL  %s\n' "$*"; failures=$((failures + 1)); }
+warn() { printf '  warn  %s\n' "$*"; }
+note() { printf '        %s\n' "$*"; }
+
+WORK=`mktemp -d "${TMPDIR:-/tmp}/verify-image.XXXXXX"`
+# cpio restores read-only directory modes, so a non-root user cannot delete
+# what it just unpacked without making it writable again first.
+cleanup() { $KEEP || { chmod -R u+w "$WORK" 2>/dev/null; rm -rf "$WORK"; }; }
+trap cleanup EXIT
+
+# --- pull boot/initrd and boot/lib.squash out of the image ------------------
+
+extract_from_iso()
+{
+	local iso=$1 out=$2
+	mkdir -p "$out/boot"
+	if command -v xorriso >/dev/null 2>&1; then
+		for f in initrd lib.squash; do
+			xorriso -osirrox on -indev "$iso" \
+				-extract /boot/$f "$out/boot/$f" >/dev/null 2>&1
+		done
+	elif command -v 7z >/dev/null 2>&1; then
+		7z x -y -o"$out" "$iso" boot/initrd boot/lib.squash >/dev/null 2>&1
+	elif command -v bsdtar >/dev/null 2>&1; then
+		bsdtar -xf "$iso" -C "$out" boot/initrd boot/lib.squash 2>/dev/null
+	else
+		echo "need one of xorriso, 7z or bsdtar to read an ISO" >&2
+		exit 2
+	fi
+}
+
+if [ -d "$IMAGE" ]; then
+	SRC=`cd "$IMAGE" && pwd`
+else
+	extract_from_iso "$IMAGE" "$WORK/iso"
+	SRC=$WORK/iso
+fi
+
+INITRD=$SRC/boot/initrd
+SQUASH=$SRC/boot/lib.squash
+
+echo "image: $IMAGE"
+if [ ! -s "$INITRD" ]; then
+	fail "boot/initrd is missing or empty"
+	echo; echo "1 check failed"; exit 1
+fi
+
+# The initrd is one cpio archive, compressed with whatever initrdcmd said.
+ROOT=$WORK/initrd
+mkdir -p "$ROOT"
+case "`head -c 6 "$INITRD" | od -An -tx1 | tr -d ' \n'`" in
+fd377a585a00*)	decomp="xz -dc" ;;
+28b52ffd*)	decomp="zstd -dc" ;;
+1f8b*)		decomp="gzip -dc" ;;
+*)		decomp="cat" ;;
+esac
+( cd "$ROOT" && $decomp "$INITRD" | cpio -idm --quiet 2>/dev/null )
+if [ ! -d "$ROOT/etc" ]; then
+	fail "could not unpack boot/initrd ($decomp | cpio)"
+	echo; echo "1 check failed"; exit 1
+fi
+
+# Fastboot images keep /lib64 in a squashfs; the initrd's /bin points into it.
+SQUASH_LIST=$WORK/squash.list
+: > "$SQUASH_LIST"
+if [ -s "$SQUASH" ]; then
+	if command -v unsquashfs >/dev/null 2>&1; then
+		unsquashfs -l "$SQUASH" 2>/dev/null \
+			| sed -n 's|^squashfs-root/||p' > "$SQUASH_LIST"
+	else
+		warn "boot/lib.squash present but unsquashfs is not installed; binaries inside it cannot be checked"
+	fi
+fi
+
+# --- effective session table ------------------------------------------------
+# thinstation.global sources TS_DEFAULTS and then TS_BUILDTIME, later wins.
+# Read the paths from the image's own thinstation.env rather than assuming.
+
+envval() { sed -n "s/^$1=//p" "$ROOT/etc/thinstation.env" 2>/dev/null | tail -1; }
+TS_DEFAULTS=`envval TS_DEFAULTS`;  [ -n "$TS_DEFAULTS" ] || TS_DEFAULTS=/etc/thinstation.defaults
+TS_BUILDTIME=`envval TS_BUILDTIME`; [ -n "$TS_BUILDTIME" ] || TS_BUILDTIME=/thinstation.buildtime
+
+conf_files=
+for f in $TS_DEFAULTS $TS_BUILDTIME; do
+	[ -f "$ROOT$f" ] && conf_files="$conf_files $ROOT$f"
+done
+
+# Last assignment of KEY across the config files, quotes stripped.
+confval()
+{
+	[ -n "$conf_files" ] || return
+	cat $conf_files | tr -d '\r' \
+		| sed -n "s/^[[:space:]]*$1=[\"']\{0,1\}\([^\"'#]*\)[\"']\{0,1\}.*/\1/p" \
+		| tail -1 | sed 's/[[:space:]]*$//'
+}
+
+echo
+echo "sessions:"
+[ -n "$conf_files" ] || fail "neither $TS_DEFAULTS nor $TS_BUILDTIME is in the initrd"
+
+session0=`confval SESSION_0_TYPE`
+types=
+for n in 0 1 2 3 4 5 6 7 8 9 10; do
+	t=`confval SESSION_${n}_TYPE`
+	[ -n "$t" ] || continue
+	auto=`confval SESSION_${n}_AUTOSTART`
+	note "SESSION_${n}_TYPE=$t${auto:+  (autostart=$auto)}"
+	types="$types $t"
+done
+
+if [ -n "$EXPECT_SESSION" ]; then
+	if [ "$session0" = "$EXPECT_SESSION" ]; then
+		pass "SESSION_0_TYPE is $EXPECT_SESSION"
+	else
+		fail "SESSION_0_TYPE is '${session0:-unset}', expected '$EXPECT_SESSION'"
+	fi
+fi
+
+# Each configured type needs its init.d entry, or the boot hangs in no_package.
+# These are symlinks to an absolute /etc path, so test -L as well as -e.
+for t in $types; do
+	if [ -e "$ROOT/etc/init.d/$t" ] || [ -L "$ROOT/etc/init.d/$t" ]; then
+		pass "/etc/init.d/$t present"
+	else
+		fail "/etc/init.d/$t is missing -- a session of type '$t' would hang the boot in no_package"
+	fi
+done
+
+# Same check for every type the image knows how to launch, whether or not a
+# session uses it yet. A miss here is not fatal on its own but is the same
+# bug waiting for someone to set SESSION_n_TYPE.
+known=`ls "$ROOT/etc/cmd" 2>/dev/null | sed -n 's/\.\(global\|window\|console\|fullscreen\|menu\)$//p' | sort -u`
+for t in $known; do
+	case " $types " in *" $t "*) continue ;; esac
+	if [ ! -e "$ROOT/etc/init.d/$t" ] && [ ! -L "$ROOT/etc/init.d/$t" ]; then
+		warn "/etc/cmd has $t but /etc/init.d/$t is missing"
+	fi
+done
+
+# --- binaries ---------------------------------------------------------------
+
+has_bin()
+{
+	local b=$1 d
+	for d in bin sbin usr/bin usr/sbin lib64/bin lib64/sbin; do
+		[ -e "$ROOT/$d/$b" ] || [ -L "$ROOT/$d/$b" ] && return 0
+	done
+	grep -qx -e "bin/$b" -e "sbin/$b" "$SQUASH_LIST" && return 0
+	return 1
+}
+
+if [ -n "`echo $REQUIRE_BIN`" ]; then
+	echo
+	echo "binaries:"
+	for b in $REQUIRE_BIN; do
+		if has_bin "$b"; then
+			pass "$b"
+		else
+			fail "$b is not in the image"
+		fi
+	done
+fi
+
+# --- sizes, for the record --------------------------------------------------
+
+echo
+echo "sizes:"
+[ -f "$IMAGE" ] && note "image      `du -k "$IMAGE" | cut -f1` KiB"
+note "initrd     `du -k "$INITRD" | cut -f1` KiB"
+[ -s "$SQUASH" ] && note "lib.squash `du -k "$SQUASH" | cut -f1` KiB"
+
+$KEEP && { echo; echo "unpacked tree kept at $WORK"; }
+
+echo
+if [ $failures -eq 0 ]; then
+	echo "all checks passed"
+	exit 0
+fi
+echo "$failures check(s) failed"
+exit 1

@@ -345,7 +345,12 @@ param rootpasswd     pleasechangeme
 #param storagepasswd  pleasechangeme			# Password for storage server
 #param sambapasswd    pleasechangeme			# Password for samba shares when using user mode security
 
-param defaultconfig  thinstation.conf.buildtime
+# Relative to ts/build, not to this directory. Left as the bare filename it
+# names ts/build/thinstation.conf.buildtime -- the stock ThinStation one,
+# which says SESSION_0_TYPE=xfwm4 -- and this profile's own copy beside this
+# file is never read. Two images were built that way before anyone noticed:
+# they carried our packages but booted the old xfce session.
+param defaultconfig  conf/thinpro/thinstation.conf.buildtime
 param baseurl        https://www.thinstation.net
 param basename       thinstation                # Used for all config/tftp/scp file names
 param basepath       ts7.2                      # Used to determine path to tftp/scp files

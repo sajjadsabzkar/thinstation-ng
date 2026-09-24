@@ -209,12 +209,28 @@ QWidget *PanelForm::buildWidget(const PanelField &f, const QString &value)
 
     if (f.type == QLatin1String("choice")) {
         QComboBox *cb = new QComboBox(this);
-        cb->addItems(f.choices);
-        const int idx = f.choices.indexOf(value);
-        if (idx >= 0)
-            cb->setCurrentIndex(idx);
-        else if (!value.isEmpty())
-            cb->setEditText(value);     // keep a value the list does not know
+        // An item may be "value<TAB>text": the text is shown, the value is
+        // what gets stored. That is what lets a list of connections show
+        // their names while the registry keeps their uuids.
+        foreach (const QString &choice, f.choices) {
+            const int tab = choice.indexOf(QLatin1Char('\t'));
+            if (tab >= 0)
+                cb->addItem(choice.mid(tab + 1), choice.left(tab));
+            else
+                cb->addItem(choice, choice);
+        }
+        // Whatever is stored has to survive the round trip, or the next Apply
+        // silently writes the first item instead: an unset default connection
+        // would become the first connection nobody chose.
+        int idx = cb->findData(value);
+        if (idx < 0 && value.isEmpty()) {
+            cb->insertItem(0, tr("(none)"), QString());
+            idx = 0;
+        } else if (idx < 0) {
+            cb->addItem(value, value);
+            idx = cb->count() - 1;
+        }
+        cb->setCurrentIndex(idx);
         if (!f.hint.isEmpty())
             cb->setToolTip(f.hint);
         return cb;
@@ -289,7 +305,7 @@ void PanelForm::watchForChanges(QWidget *w)
     if (QCheckBox *cb = qobject_cast<QCheckBox *>(w))
         connect(cb, SIGNAL(toggled(bool)), this, SLOT(markDirty()));
     else if (QComboBox *cb = qobject_cast<QComboBox *>(w))
-        connect(cb, SIGNAL(currentTextChanged(QString)), this, SLOT(markDirty()));
+        connect(cb, SIGNAL(currentIndexChanged(int)), this, SLOT(markDirty()));
     else if (QSpinBox *sb = qobject_cast<QSpinBox *>(w))
         connect(sb, SIGNAL(valueChanged(int)), this, SLOT(markDirty()));
     else if (QLineEdit *le = qobject_cast<QLineEdit *>(w))
@@ -314,7 +330,7 @@ QString PanelForm::readWidget(const PanelField &f, QWidget *w) const
     }
     if (f.type == QLatin1String("choice")) {
         QComboBox *cb = qobject_cast<QComboBox *>(w);
-        return cb ? cb->currentText() : QString();
+        return cb ? cb->currentData().toString() : QString();
     }
     if (f.type == QLatin1String("int")) {
         QSpinBox *sb = qobject_cast<QSpinBox *>(w);

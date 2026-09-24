@@ -1,0 +1,50 @@
+#!/bin/sh
+# A stand-in for util-linux logger, which the image does not carry.
+#
+# tp-session, tp-launch, tp-autostart and tp-logship all log with
+# `logger -t <tag> <message>`. Without this, each of those lines printed
+# "logger: not found" and the message itself was lost -- exactly the lines
+# that say why a connection did or did not start. systemd-cat is in the
+# image and puts them in the journal under the same tag.
+#
+# Understands -t TAG and -p PRIORITY (facility.level or level); everything
+# else is the message. With no message, reads stdin, as logger does.
+
+TAG=logger
+PRIO=info
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-t)	shift; TAG="$1" ;;
+	-p)	shift; PRIO="${1##*.}" ;;
+	-s|-i)	;;
+	--)	shift; break ;;
+	-*)	;;
+	*)	break ;;
+	esac
+	shift
+done
+
+case "$PRIO" in
+emerg|alert|crit|err|warning|notice|info|debug) ;;
+error)	PRIO=err ;;
+warn)	PRIO=warning ;;
+*)	PRIO=info ;;
+esac
+
+if command -v systemd-cat >/dev/null 2>&1; then
+	if [ $# -gt 0 ]; then
+		echo "$*" | systemd-cat -t "$TAG" -p "$PRIO"
+	else
+		systemd-cat -t "$TAG" -p "$PRIO"
+	fi
+	exit 0
+fi
+
+# No journal to write to: stderr is better than nothing.
+if [ $# -gt 0 ]; then
+	echo "$TAG: $*" >&2
+else
+	sed "s/^/$TAG: /" >&2
+fi
+exit 0

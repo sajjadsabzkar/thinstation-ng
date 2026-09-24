@@ -90,4 +90,65 @@ logger -t tp-launch "starting $label ($type/$uuid) as $mode"
 
 # workspace is position 4 and unused here; pass_enable, gate and gate_user
 # are left empty so the package's own defaults apply.
-exec pkg "$mode" "$package" "$server" "$options" "" "$user" "" "" ""
+launch() {
+	pkg "$mode" "$package" "$server" "$options" "" "$user" "" "" ""
+}
+
+admin_mode() {
+	tpreg test "root/users/${USER:-user}/adminMode" 1
+}
+
+# autoReconnect is what keeps a kiosk a kiosk: when the session ends, for
+# whatever reason, it comes straight back. The control panel's zero
+# configuration turns it on for the default connection. Nothing used to
+# read it, so a kiosk whose connection dropped was left on an empty screen.
+if ! tpreg test "$node/autoReconnect" 1; then
+	started=`date +%s`
+	launch
+	status=$?
+	if [ $(( `date +%s` - started )) -lt 10 ] && [ $status -ne 0 ] \
+	   && which tp-diag-request >/dev/null 2>&1; then
+		tp-diag-request "connection-failed:$type"
+	fi
+	exit $status
+fi
+
+# Doubled before each wait, so the first retry comes after two seconds.
+delay=1
+while :; do
+	started=`date +%s`
+	launch
+	status=$?
+	ran=$(( `date +%s` - started ))
+	logger -t tp-launch "$label ended with status $status after ${ran}s"
+
+	# Stop when there is no longer anything to reconnect to, or someone
+	# asked for it to stop: the connection was deleted, autoReconnect was
+	# turned off, or an administrator is working on the unit.
+	tpreg has "$node/label" || break
+	tpreg test "$node/autoReconnect" 1 || break
+	if admin_mode; then
+		logger -t tp-launch "administrator mode, not reconnecting $label"
+		break
+	fi
+
+	# A connection that fails straight away -- server down, no network --
+	# must not spin. Back off up to a minute; a session that lasted a while
+	# starts over from a short delay.
+	# A connection that dies within seconds is a failure worth a report:
+	# a wrong server, a missing library, a client that crashes on this
+	# hardware. tp-diag-trigger sends at most one per reason per ten
+	# minutes, so a reconnect loop cannot flood the server.
+	if [ $ran -lt 10 ] && [ $status -ne 0 ] && which tp-diag-request >/dev/null 2>&1; then
+		tp-diag-request "connection-failed:$type"
+	fi
+	if [ $ran -ge 60 ]; then
+		delay=2
+	else
+		delay=$(( delay * 2 ))
+		[ $delay -gt 60 ] && delay=60
+	fi
+	logger -t tp-launch "reconnecting $label in ${delay}s"
+	sleep $delay
+done
+exit $status

@@ -6,44 +6,55 @@
 # and, in the same breath, turns on autostart and autoReconnect for the
 # default connection. Kiosk is never one key there and it is not one key
 # here either -- picking "zero" below is what ties the pieces together.
+#
+# root/product/config is the only switch. tp-session reads it to decide
+# whether there is a taskbar and whether the connection manager comes up as
+# the kiosk sidebar; nothing per-user is involved, because the session user
+# (tsuser) is not the ThinPro user name ("user") and a per-user key under
+# either name was never read by the other side.
 
 . /etc/tp/panels/common 2>/dev/null
 
 CONFIG=`tpreg get root/product/config`
 [ -n "$CONFIG" ] || CONFIG=standard
 
-DEFAULT=`tpreg get root/ConnectionManager/defaultConnection`
+# A default connection is a uuid. Older builds of the panel stored the whole
+# "uuid type label" line it listed; the first word is still the uuid.
+DEFAULT=`tpreg get root/ConnectionManager/defaultConnection | awk '{ print $1 }'`
+if [ -n "$DEFAULT" ]; then
+	tpreg set root/ConnectionManager/defaultConnection "$DEFAULT"
+fi
 
 # The session scripts read these out of the runtime layer.
 runtime_set PRODUCT_CONFIG "$CONFIG"
 runtime_set SHOW_TASKBAR "`tpreg get root/desktop/showTaskbar`"
 runtime_set LAUNCH_CONNECTION_MANAGER "`tpreg get root/users/user/launchConnectionManager`"
 
+# Earlier builds kept kiosk mode in a per-user key, which ThinPro documents
+# as internal. Drop it so it cannot disagree with root/product/config.
+tpreg unset root/users/user/kioskMode 2>/dev/null
+
 if [ "$CONFIG" = "zero" ]; then
-	# A kiosk has exactly one connection and no way out of it.
-	if [ -n "$DEFAULT" ]; then
-		TYPE=`tpreg get "root/ConnectionManager/connections/$DEFAULT/type"`
-		if [ -n "$TYPE" ]; then
+	if [ -z "$DEFAULT" ]; then
+		# Without a default connection there is nothing to start, and a
+		# kiosk with an empty screen is worse than a desktop. Say so on
+		# stderr; the panel shows it.
+		echo "Zero configuration needs a default connection; none is set." >&2
+	else
+		# Connections live under their type; find which one owns the uuid.
+		TYPE=`tpreg connections | awk -v u="$DEFAULT" '$1 == u { print $2; exit }'`
+		if [ -z "$TYPE" ]; then
+			echo "The default connection $DEFAULT no longer exists." >&2
+		else
+			# A kiosk has exactly one connection and no way out of it.
 			NODE="root/ConnectionType/$TYPE/connections/$DEFAULT"
 			tpreg set "$NODE/autostart" 1
 			tpreg set "$NODE/autoReconnect" 1
 			tpreg set "$NODE/windowType" full
 		fi
 	fi
-
-	# Without a default connection there is nothing to start, and a kiosk
-	# with an empty screen is worse than a desktop. Say so on stderr; the
-	# panel shows it.
-	if [ -z "$DEFAULT" ]; then
-		echo "Zero configuration needs a default connection; none is set." >&2
-	fi
-
-	tpreg set root/users/user/kioskMode 1
-	tpreg set root/desktop/showTaskbar 0
-	runtime_set SHOW_TASKBAR 0
-else
-	tpreg set root/users/user/kioskMode 0
 fi
 
+# The running session picks the change up now, rather than at next login.
 notify_session
 exit 0

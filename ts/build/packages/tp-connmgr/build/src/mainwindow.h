@@ -7,7 +7,7 @@
 //           when the user is allowed to.
 //   kiosk   frameless and full screen, no window controls, no editing. The
 //           user picks a connection and nothing else. Selected by
-//           root/users/<user>/kioskMode.
+//           root/product/config = zero.
 
 #ifndef TP_MAINWINDOW_H
 #define TP_MAINWINDOW_H

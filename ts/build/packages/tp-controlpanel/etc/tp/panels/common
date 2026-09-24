@@ -27,9 +27,17 @@ runtime_set() {
 	echo "${key}=${value}" >> "$file"
 }
 
-# Best-effort notification to a running session. Nothing depends on it.
+# Tells a running tp-session to re-read the product configuration, so that
+# switching to or from kiosk takes effect without logging out. tp-session
+# writes its pid under /var/lib/tp/tmp, which the session user owns; /run is
+# root's and the session could never have created a file there.
 notify_session() {
-	[ -e /run/tp-session.pid ] || return 0
-	kill -USR1 "`cat /run/tp-session.pid`" 2>/dev/null
+	pidfile=/var/lib/tp/tmp/session.pid
+	[ -e "$pidfile" ] || return 0
+	pid=`cat $pidfile 2>/dev/null`
+	# A pid file left behind by a session that died can name some other
+	# process by now, and SIGUSR1 terminates anything that does not trap it.
+	grep -q tp-session "/proc/$pid/cmdline" 2>/dev/null || return 0
+	kill -USR1 "$pid" 2>/dev/null
 	return 0
 }

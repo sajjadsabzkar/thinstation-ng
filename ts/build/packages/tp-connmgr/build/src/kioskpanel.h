@@ -31,7 +31,7 @@
 //
 // Registry keys, ThinPro's own:
 //
-//   root/users/<user>/kioskMode         this panel instead of the window
+//   root/product/config = zero          this panel instead of the window
 //   root/users/<user>/hideDesktopPanel  hide it until a hot corner is hit
 //   root/users/<user>/adminMode         the user has authenticated as admin
 

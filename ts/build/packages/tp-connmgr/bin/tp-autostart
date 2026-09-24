@@ -7,7 +7,10 @@
 
 . /etc/thinstation.global
 
-if [ -e /var/run/tp-admin ]; then
+# Administrator mode is a registry flag set by tp-switch-admin and the kiosk
+# sidebar. This used to test for /var/run/tp-admin, which nothing creates,
+# so connections autostarted underneath administrators anyway.
+if tpreg test "root/users/${USER:-user}/adminMode" 1; then
 	logger -t tp-autostart "administrative mode, not launching autostart connections"
 	exit 0
 fi

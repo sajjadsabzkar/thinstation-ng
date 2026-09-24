@@ -45,14 +45,15 @@ int main(int argc, char *argv[])
     Model model(&reg);
     model.reload();
 
-    const QString user = envOr("USER", QLatin1String("user"));
-
-    // Normally the registry decides. The flags are for the session script,
-    // which already knows which way it wants this to come up, and for
-    // testing a kiosk without first writing a key into a live registry.
+    // Normally the registry decides, through the same key tp-session reads:
+    // zero configuration is a kiosk. This used to be
+    // root/users/$USER/kioskMode, but the session runs as tsuser while the
+    // control panel wrote the key for ThinPro's "user", so the two never
+    // met and kiosk mode could not be turned on at all. The flags are for
+    // the session script, which passes one explicitly, and for testing.
     const QStringList args = app.arguments();
-    bool kiosk = reg.boolValue(
-        QLatin1String("root/users/") + user + QLatin1String("/kioskMode"), false);
+    bool kiosk = reg.value(QLatin1String("root/product/config"))
+                 == QLatin1String("zero");
     if (args.contains(QLatin1String("--kiosk")))
         kiosk = true;
     if (args.contains(QLatin1String("--window")))

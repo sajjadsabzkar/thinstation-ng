@@ -210,9 +210,11 @@ void Wizard::onLanguageClicked()
 void Wizard::selectLanguage(int index)
 {
     m_language = index;
+    // Buttons are only made for the languages the fonts can draw, so a
+    // button's place in the list is not its index in kLanguages.
     for (int i = 0; i < m_languageButtons.size(); ++i) {
         QPushButton *b = m_languageButtons.at(i);
-        b->setProperty("tpSelected", i == index);
+        b->setProperty("tpSelected", b->property("tpIndex").toInt() == index);
         b->style()->unpolish(b);
         b->style()->polish(b);
     }

@@ -13,12 +13,31 @@ Enabled=false
 library=org.kde.kwin.aurorae
 theme=kwin4_decoration_qml_plastik
 BorderSize=Normal
-ButtonsOnLeft=M
+# As ThinPro 8.1 has it (/usr/share/hptc-kwin-mgr/thinpro-settings/kwinrc):
+# nothing on the left, minimize/maximize/close on the right. ThinPro sets
+# no decoration either, and with only Aurorae installed KWin lands on this
+# same Plastik theme.
+ButtonsOnLeft=
 ButtonsOnRight=IAX
 
 [Windows]
 FocusPolicy=ClickToFocus
 Placement=Centered
+
+[MouseBindings]
+# ThinPro: right-clicking a title bar does nothing -- no window menu that
+# offers "move to desktop", "keep above" and the rest to a kiosk user.
+CommandActiveTitlebar3=Nothing
+CommandInactiveTitlebar3=Nothing
+
+[Plugins]
+# ThinPro's set: no screen-edge actions, no window overview, and the
+# minimize-all script for its "show desktop".
+screenedgeEnabled=false
+minimizeallEnabled=true
+presentwindowsEnabled=false
+overviewEnabled=false
+windowviewEnabled=false
 
 [TabBox]
 # The QML task switcher needs a Plasma look-and-feel package that is not

@@ -1,0 +1,6 @@
+[Unit]
+Description=Apply system settings for the control panel
+
+[Service]
+Type=oneshot
+ExecStart=/bin/tp-root-apply

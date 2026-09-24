@@ -810,7 +810,11 @@ void Wizard::commit()
     }
 
     // Apply what was just chosen, rather than waiting for a reboot.
-    HwCheck::runCommand(QLatin1String("/etc/tp/panels/keyboard.apply"), 8000);
-    HwCheck::runCommand(QLatin1String("/etc/tp/panels/datetime.apply"), 8000);
-    HwCheck::runCommand(QLatin1String("/etc/tp/panels/language.apply"), 8000);
+    // Through tp-apply: the time zone and the locale are system settings,
+    // applied as root by tp-root-apply.service. Run straight from here, as
+    // the session user, they failed without a word and the clock kept the
+    // build's zone.
+    HwCheck::runCommand(QLatin1String("tp-apply keyboard"), 8000);
+    HwCheck::runCommand(QLatin1String("tp-apply datetime"), 30000);
+    HwCheck::runCommand(QLatin1String("tp-apply language"), 30000);
 }

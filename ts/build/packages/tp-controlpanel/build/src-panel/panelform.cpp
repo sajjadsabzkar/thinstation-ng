@@ -358,12 +358,19 @@ bool PanelForm::runApplyHook(QString *output)
     const QString hook = QLatin1String("/etc/tp/panels/") + m_panelId
                        + QLatin1String(".apply");
 
+    // tp-apply runs the hook here, or -- for the panels that change the
+    // system rather than the session -- has tp-root-apply.service run it
+    // as root and relays what it said. The session runs as tsuser, and the
+    // image has no sudo.
     QProcess p;
-    p.start(hook, QStringList());
+    p.start(QLatin1String("tp-apply"), QStringList() << m_panelId);
+    if (!p.waitForStarted(3000))
+        p.start(hook, QStringList());   // an image without tp-apply
     if (!p.waitForStarted(3000))
         return true;                // no hook is not an error
 
-    if (!p.waitForFinished(20000)) {
+    // Long enough for the system service's own 60 s limit.
+    if (!p.waitForFinished(90000)) {
         p.kill();
         p.waitForFinished(1000);
         if (output) *output = tr("%1 did not finish.").arg(hook);

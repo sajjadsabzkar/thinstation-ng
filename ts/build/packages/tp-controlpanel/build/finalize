@@ -1,0 +1,2 @@
+#tp-controlpanel 42
+systemctl enable tp-root-apply.path

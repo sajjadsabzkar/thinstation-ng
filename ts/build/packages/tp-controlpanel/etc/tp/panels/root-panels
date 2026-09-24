@@ -1,0 +1,19 @@
+# Panels whose .apply hook changes the system rather than the session, and
+# so has to run as root. The session runs as tsuser and the image carries no
+# sudo; tp-apply hands these to tp-root-apply.service, which runs nothing
+# that is not named here (it reads this list itself, as root).
+#
+# Keyboard, mouse, display, sound, background and the rest are absent on
+# purpose: they talk to the X server and must run inside the session.
+bluetooth
+datetime
+firewall
+language
+network
+power
+printers
+restartplan
+security
+snmp
+sshd
+usb

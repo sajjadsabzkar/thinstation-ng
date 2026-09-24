@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch for system settings the session asks to apply
+
+[Path]
+# tp-apply leaves a request here for panels in /etc/tp/panels/root-panels.
+# 1733: the session can drop a file in but cannot list or remove others'.
+DirectoryNotEmpty=/run/tp-apply/requests
+MakeDirectory=yes
+DirectoryMode=1733
+
+[Install]
+WantedBy=paths.target

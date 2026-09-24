@@ -1,0 +1,73 @@
+#!/bin/sh
+# Serves tp-apply's requests, as root: runs the .apply hook of each panel
+# asked for, if and only if that panel is in /etc/tp/panels/root-panels.
+#
+# Started by tp-root-apply.path whenever /run/tp-apply/requests is not
+# empty. A request is an empty file named <panel>.<id>; the answer is
+# /run/tp-apply/results/<panel>.<id>.out (what the hook printed) and .rc
+# (its exit status), which the waiting tp-apply picks up.
+#
+# The requests directory is writable by the session, so nothing in a
+# request is trusted: the name is checked against a strict pattern and the
+# fixed list, the hook must be a root-owned file under /etc/tp/panels, and
+# no argument or environment from the requester reaches it.
+
+REQUESTS=/run/tp-apply/requests
+RESULTS=/run/tp-apply/results
+LIST=/etc/tp/panels/root-panels
+
+mkdir -p "$RESULTS"
+chmod 0755 "$RESULTS"
+
+# Answers nobody collected.
+find "$RESULTS" -type f -mmin +5 -delete 2>/dev/null
+
+answer() {	# id rc text
+	printf '%s\n' "$3" > "$RESULTS/$1.out"
+	echo "$2" > "$RESULTS/$1.rc.tmp" && mv -f "$RESULTS/$1.rc.tmp" "$RESULTS/$1.rc"
+	chmod 0644 "$RESULTS/$1.out" "$RESULTS/$1.rc" 2>/dev/null
+}
+
+# New requests can arrive while hooks run; keep going until none are left.
+# Every entry is removed whatever it is -- a dotfile, a name with spaces, a
+# directory, a symlink -- because anything left behind keeps the path unit
+# firing until systemd gives up on it, and then nothing applies at all.
+# The round limit is the same guard from the other side.
+rounds=0
+while [ $rounds -lt 20 ]; do
+	rounds=$((rounds + 1))
+	found=0
+	for path in "$REQUESTS"/* "$REQUESTS"/.[!.]* "$REQUESTS"/..?*; do
+		[ -e "$path" ] || [ -L "$path" ] || continue
+		found=1
+		id=`basename "$path"`
+		rm -rf "$path"
+		case "$id" in
+		*[!a-z0-9.]*|.*|*..*) continue ;;
+		esac
+		panel=${id%%.*}
+		[ "$panel" != "$id" ] || continue
+
+		if ! grep -qx "$panel" "$LIST" 2>/dev/null; then
+			logger -t tp-root-apply "refused $panel: not a root panel" 2>/dev/null
+			answer "$id" 1 "$panel is not applied by the system service."
+			continue
+		fi
+		hook=/etc/tp/panels/$panel.apply
+		if [ ! -f "$hook" ] || [ "`stat -c %u "$hook" 2>/dev/null`" != 0 ]; then
+			answer "$id" 1 "No system hook for $panel."
+			continue
+		fi
+
+		# A clean environment, and no X: these hooks change the system.
+		limit=
+		command -v timeout >/dev/null 2>&1 && limit="timeout 60"
+		out=`env -i PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin HOME=/root \
+			$limit sh "$hook" 2>&1`
+		rc=$?
+		logger -t tp-root-apply "$panel applied, status $rc" 2>/dev/null
+		answer "$id" $rc "$out"
+	done
+	[ $found = 1 ] || break
+done
+exit 0

@@ -1,0 +1,57 @@
+#!/bin/sh
+# Applies one panel's settings: runs /etc/tp/panels/<panel>.apply.
+#
+#   tp-apply <panel>
+#
+# Most hooks talk to the X server and run right here, as the session user.
+# The ones listed in /etc/tp/panels/root-panels change the system (time
+# zone, network, firewall, sshd ...) and need root, which the session does
+# not have and the image has no sudo to borrow. For those this leaves a
+# request for tp-root-apply.service and waits for its answer: the hook's
+# output on stderr, its exit status as ours.
+#
+# The request says only which panel. The hook reads the values from the
+# registry itself, as it does when it runs in the session.
+
+PANEL="$1"
+case "$PANEL" in
+''|*[!a-z0-9]*)
+	echo "usage: tp-apply <panel>   (lower-case letters and digits)" >&2
+	exit 2
+	;;
+esac
+
+HOOK=/etc/tp/panels/$PANEL.apply
+# No hook is not an error: plenty of panels only store settings.
+[ -x "$HOOK" ] || exit 0
+
+if [ "`id -u`" = 0 ] || ! grep -qx "$PANEL" /etc/tp/panels/root-panels 2>/dev/null; then
+	exec "$HOOK"
+fi
+
+REQUESTS=/run/tp-apply/requests
+RESULTS=/run/tp-apply/results
+if [ ! -d "$REQUESTS" ]; then
+	echo "The service that applies system settings is not running; $PANEL was saved but not applied." >&2
+	exit 1
+fi
+
+id="$PANEL.`date +%s`$$${RANDOM:-0}"
+if ! : > "$REQUESTS/$id" 2>/dev/null; then
+	echo "Could not ask for $PANEL to be applied." >&2
+	exit 1
+fi
+
+# The service runs the hook with a 60 s limit; allow for that plus a queue.
+i=0
+while [ $i -lt 90 ]; do
+	if [ -e "$RESULTS/$id.rc" ]; then
+		cat "$RESULTS/$id.out" >&2 2>/dev/null
+		rc=`cat "$RESULTS/$id.rc" 2>/dev/null`
+		exit ${rc:-1}
+	fi
+	sleep 1
+	i=$((i + 1))
+done
+echo "$PANEL was saved, but applying it did not finish in time." >&2
+exit 1

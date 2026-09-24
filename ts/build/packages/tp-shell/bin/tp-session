@@ -47,21 +47,92 @@ if [ -z "$WM_CMD" ]; then
 	log "no window manager found, session cannot start"
 	exit 1
 fi
-log "window manager: $WM_CMD"
 
-case "$WM_CMD" in
-kwin_x11)
-	# Software rendering is the realistic case on the hardware this image
-	# targets, and kwin's OpenGL backend on llvmpipe is unusably slow.
-	KWIN_COMPOSE=N export KWIN_COMPOSE
-	QT_QUICK_BACKEND=software export QT_QUICK_BACKEND
-	$WM_CMD --replace &
-	;;
-*)
-	$WM_CMD &
-	;;
-esac
-wm_pid=$!
+# What actually ran and why goes to a plain file next to the session pid, so
+# that diagnostics can tell "kwin was asked for but openbox is running" apart
+# from "openbox was asked for" without reading the journal.
+WMSTATE=/var/lib/tp/tmp/session-wm
+mkdir -p "`dirname $WMSTATE`" 2>/dev/null
+record_wm() {
+	# record_wm <running> <reason-or-empty>
+	{
+		echo "requested=${WM:-default}"
+		echo "running=$1"
+		echo "fallback_reason=$2"
+		echo "time=`date '+%Y-%m-%d %H:%M:%S'`"
+	} > "$WMSTATE" 2>/dev/null
+}
+
+start_wm() {
+	case "$1" in
+	kwin_x11)
+		# Software rendering is the realistic case on the hardware this
+		# image targets, and kwin's OpenGL backend on llvmpipe is unusably
+		# slow. KDE_DEBUG keeps KCrash from restarting kwin as a new
+		# process behind our back: a crash has to end $wm_pid, or the
+		# fallback below could never see it.
+		KWIN_COMPOSE=N QT_QUICK_BACKEND=software KDE_DEBUG=1 \
+			$1 --replace &
+		;;
+	*)
+		$1 &
+		;;
+	esac
+	wm_pid=$!
+}
+
+# A window manager that is running has claimed _NET_SUPPORTING_WM_CHECK on
+# the root window. Nothing else in this session sets it.
+wm_claimed_root() {
+	which xprop >/dev/null 2>&1 || return 1
+	xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id'
+}
+
+# KWin is the one that can fail on the hardware: old GPUs, missing GL, a
+# plugin that does not load. Give it a grace period; if it dies inside it,
+# the session carries on with openbox instead of ending at a black screen.
+# Everything else in this script waits until the choice is final, so the
+# taskbar and connection manager never start under a window manager that is
+# about to disappear.
+KWIN_GRACE=15
+
+log "window manager: $WM_CMD"
+start_wm "$WM_CMD"
+fallback_reason=
+
+if [ "$WM_CMD" = kwin_x11 ]; then
+	waited=0
+	while [ $waited -lt $KWIN_GRACE ]; do
+		if ! kill -0 $wm_pid 2>/dev/null; then
+			wait $wm_pid
+			fallback_reason="kwin_x11 exited with status $? after ${waited}s"
+			break
+		fi
+		wm_claimed_root && break
+		sleep 1
+		waited=$((waited + 1))
+	done
+	# Alive at the end of the grace period counts as working: a slow
+	# machine is not a broken one.
+
+	if [ -n "$fallback_reason" ]; then
+		FALLBACK=`pick_wm openbox xfwm4`
+		# Whatever is left of kwin must not hold the window manager
+		# selection, or openbox refuses to start.
+		pkill -x kwin_x11 2>/dev/null
+		if [ -n "$FALLBACK" ]; then
+			log "$fallback_reason; falling back to $FALLBACK"
+			WM_CMD=$FALLBACK
+			start_wm "$WM_CMD"
+			which tp-diag-request >/dev/null 2>&1 && tp-diag-request wm-fallback
+		else
+			log "$fallback_reason and no fallback window manager is installed"
+			record_wm none "$fallback_reason"
+			exit 1
+		fi
+	fi
+fi
+record_wm "$WM_CMD" "$fallback_reason"
 
 # --- root window ------------------------------------------------------------
 # Nothing paints the root window without a desktop process, so it would stay
@@ -89,38 +160,140 @@ if [ "`tpreg get root/setup/completed 2>/dev/null`" != "1" ] \
 	tp-wizard
 fi
 
-# --- taskbar ----------------------------------------------------------------
-# Always present in standard configuration. It is the answer to closing the
-# connection manager and finding nothing underneath.
-if [ "`tpreg get root/product/config 2>/dev/null`" != "zero" ] \
-   && [ "`tpreg get root/desktop/showTaskbar 2>/dev/null`" != "0" ] \
-   && which tp-taskbar >/dev/null 2>&1; then
-	tp-taskbar &
-fi
+# --- taskbar and connection manager ----------------------------------------
+# root/product/config is the one switch between the two shapes of session:
+#
+#   standard  taskbar, and the connection manager as an ordinary window
+#   zero      no taskbar; the connection manager is the kiosk sidebar and is
+#             brought back whenever it exits, because a kiosk with nothing
+#             on screen is a hung client as far as the user is concerned
+#
+# The connection manager is told which one with --kiosk or --window rather
+# than working it out for itself. It used to read root/users/$USER/kioskMode,
+# but the session runs as tsuser and the control panel wrote the key under
+# ThinPro's user name, "user", so kiosk mode never came up at all.
+#
+# Changing the configuration in the control panel sends this script SIGUSR1,
+# and it tears both down and starts them again in the new shape.
 
-# --- connection manager -----------------------------------------------------
-# The same gate as ThinPro's 92hptc-kiosk hook: only auto-launch when the
-# user right says so.
-if [ "`tpreg get root/users/user/launchConnectionManager 2>/dev/null`" = "1" ] \
-   && which tp-connmgr >/dev/null 2>&1; then
-	if [ "`tpreg get root/product/config 2>/dev/null`" = "zero" ]; then
-		# Kiosk: the connection manager IS the session. If it dies,
-		# bring it back, but slowly enough that a crash loop does not
-		# saturate the machine.
-		(
-			while kill -0 $wm_pid 2>/dev/null; do
-				tp-connmgr
-				sleep 2
-			done
-		) &
-	else
-		tp-connmgr &
+PIDFILE=/var/lib/tp/tmp/session.pid
+mkdir -p "`dirname $PIDFILE`" 2>/dev/null
+echo $$ > "$PIDFILE" 2>/dev/null
+rm -f /var/lib/tp/tmp/session-ending
+
+product_config() {
+	case "`tpreg get root/product/config 2>/dev/null`" in
+	zero)	echo zero ;;
+	*)	echo standard ;;
+	esac
+}
+
+taskbar_pid=
+connmgr_pid=
+mode=
+
+start_shell() {
+	mode=`product_config`
+	log "product configuration: $mode"
+
+	if [ "$mode" = standard ] \
+	   && [ "`tpreg get root/desktop/showTaskbar 2>/dev/null`" != "0" ] \
+	   && which tp-taskbar >/dev/null 2>&1; then
+		tp-taskbar &
+		taskbar_pid=$!
 	fi
-fi
+
+	# The same gate as ThinPro's 92hptc-kiosk hook: only auto-launch when
+	# the user right says so.
+	if [ "`tpreg get root/users/user/launchConnectionManager 2>/dev/null`" = "1" ] \
+	   && which tp-connmgr >/dev/null 2>&1; then
+		if [ "$mode" = zero ]; then
+			# If it dies, bring it back, but slowly enough that a crash
+			# loop does not saturate the machine.
+			(
+				while kill -0 $wm_pid 2>/dev/null; do
+					tp-connmgr --kiosk
+					sleep 2
+				done
+			) &
+		else
+			tp-connmgr --window &
+		fi
+		connmgr_pid=$!
+	fi
+}
+
+stop_shell() {
+	# The kiosk respawn loop is a subshell with tp-connmgr as its child.
+	# Kill the child first: the loop then sits in its two-second sleep,
+	# which is the window in which it is safe to kill the loop itself.
+	for pid in $connmgr_pid $taskbar_pid; do
+		pkill -P $pid 2>/dev/null
+		kill $pid 2>/dev/null
+		pkill -P $pid 2>/dev/null
+	done
+	connmgr_pid=
+	taskbar_pid=
+}
+
+# A fresh login is a user-mode login. Administrator mode left over from an
+# earlier session on this boot would otherwise stop autostart from running
+# and leave the control panel unlocked.
+tpreg set "root/users/${USER:-user}/adminMode" 0 2>/dev/null
+
+reload=0
+trap 'reload=1' USR1
+
+start_shell
 
 # --- autostart connections --------------------------------------------------
 if which tp-autostart >/dev/null 2>&1; then
 	tp-autostart &
 fi
 
-wait $wm_pid
+# `wait` returns early when a trapped signal arrives, so this loop is what
+# lets a control-panel change reach a running session.
+while :; do
+	if ! kill -0 $wm_pid 2>/dev/null; then
+		# KWin that survived its grace period can still die later, on the
+		# first effect or the first window that trips a GPU bug. Carry on
+		# under openbox rather than ending the session under the user.
+		# Not when the machine is going down, or when something ended the
+		# session on purpose (it drops /var/lib/tp/tmp/session-ending).
+		ending=0
+		[ -e /var/lib/tp/tmp/session-ending ] && ending=1
+		case "`systemctl is-system-running 2>/dev/null`" in stopping) ending=1 ;; esac
+		if [ $ending = 0 ] && [ "$WM_CMD" = kwin_x11 ] \
+		   && FALLBACK=`pick_wm openbox xfwm4`; then
+			fallback_reason="kwin_x11 exited with status ${wm_status:-?} during the session"
+			log "$fallback_reason; falling back to $FALLBACK"
+			pkill -x kwin_x11 2>/dev/null
+			WM_CMD=$FALLBACK
+			start_wm "$WM_CMD"
+			record_wm "$WM_CMD" "$fallback_reason"
+			# The kiosk respawn loop watches the old pid; restart it.
+			stop_shell
+			start_shell
+			which tp-diag-request >/dev/null 2>&1 && tp-diag-request wm-fallback
+			continue
+		fi
+		break
+	fi
+	wait $wm_pid
+	wm_status=$?
+	if [ $reload = 1 ]; then
+		reload=0
+		old=$mode
+		stop_shell
+		start_shell
+		# Entering zero configuration means the default connection is now
+		# supposed to be up; nothing else would start it before a relogin.
+		if [ "$old" != zero ] && [ "$mode" = zero ] \
+		   && which tp-autostart >/dev/null 2>&1; then
+			tp-autostart &
+		fi
+	fi
+done
+
+stop_shell
+rm -f "$PIDFILE" /var/lib/tp/tmp/session-ending

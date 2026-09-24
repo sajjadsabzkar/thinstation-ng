@@ -1,0 +1,4 @@
+#!/bin/sh
+export PACKAGE="kwin"
+repackage -c
+exit $?

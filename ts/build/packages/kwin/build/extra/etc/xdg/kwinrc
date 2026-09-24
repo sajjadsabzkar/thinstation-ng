@@ -1,0 +1,26 @@
+# System-wide KWin defaults for the thin client. A user's own
+# ~/.config/kwinrc still wins, key by key.
+
+[Compositing]
+# Software rendering is the realistic case on the old hardware this image
+# is for, and compositing on llvmpipe costs more than it is worth. tp-session
+# also sets KWIN_COMPOSE=N.
+Enabled=false
+
+[org.kde.kdecoration2]
+# Aurorae's Plastik: a plain title bar with the usual buttons, without the
+# 220 MB the Breeze decoration would bring.
+library=org.kde.kwin.aurorae
+theme=kwin4_decoration_qml_plastik
+BorderSize=Normal
+ButtonsOnLeft=M
+ButtonsOnRight=IAX
+
+[Windows]
+FocusPolicy=ClickToFocus
+Placement=Centered
+
+[TabBox]
+# The QML task switcher needs a Plasma look-and-feel package that is not
+# here; the plain list works everywhere.
+LayoutName=compact

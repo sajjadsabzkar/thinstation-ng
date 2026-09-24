@@ -417,5 +417,19 @@ package qt5-min              # QtCore/Gui/Widgets only, no QML
 # from the chooser.
 package freerdp              # RDP            -> "FreeRDP 2"
 #package ica                  # dropped: non-distributable: needs the Citrix client fetched with --autodl before this can build
-#package horizon              # dropped: non-distributable: needs the VMware Horizon client fetched with --autodl
+package horizon              # VDI            -> "VMware Horizon View" (Omnissa client)
 package firefox              # Web            -> "Web Browser"
+
+# The Omnissa Horizon client is not redistributable, so it is not in git.
+# The build copies it from ts's downloads directory (/downloads in the
+# chroot, /thinstation/downloads on the build VM). The GitHub workflow
+# rewrites this line from its horizon_url input, or drops the package.
+param horizonurl     file:/downloads/Omnissa-Horizon-Client-2606-8.19.0-32216036411.x64.rpm
+
+# Diagnostics: hardware report, log bundle, per-boot and on-failure upload.
+package tp-diag
+
+# The window manager pair, the way ThinPro ships it: kwin_x11 is the active
+# one (root/wm/name=kwin), openbox stays installed as the fallback tp-session
+# drops to when kwin cannot run on the hardware.
+package kwin

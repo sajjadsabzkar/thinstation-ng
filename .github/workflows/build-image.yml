@@ -38,6 +38,10 @@ on:
         description: "Extra options for ./build, e.g. --allmodules"
         type: string
         default: ""
+      horizon_url:
+        description: "URL of the Omnissa Horizon client RPM (not redistributable, so not in git). Blank = build without Horizon"
+        type: string
+        default: ""
       publish:
         description: "Where the image goes. Artifacts count against a 500 MB quota on free plans; releases do not."
         type: choice
@@ -68,6 +72,7 @@ jobs:
       SESSION_TYPE: ${{ inputs.session_type }}
       EXTRA_PACKAGES: ${{ inputs.extra_packages }}
       BUILD_OPTIONS: ${{ inputs.build_options }}
+      HORIZON_URL: ${{ inputs.horizon_url }}
       PUBLISH: ${{ inputs.publish }}
       FEDORA: fedora:42
 
@@ -80,6 +85,7 @@ jobs:
           [ -z "$SESSION_TYPE" ] || echo "$SESSION_TYPE" | grep -Eqx '[A-Za-z0-9_-]+' || fail "session_type: letters, digits, _ - only"
           echo "$EXTRA_PACKAGES" | grep -Eqx '[A-Za-z0-9._+ -]*'       || fail "extra_packages: package names separated by spaces"
           echo "$BUILD_OPTIONS"  | grep -Eqx '[A-Za-z0-9._=/ -]*'      || fail "build_options: plain ./build flags only"
+          [ -z "$HORIZON_URL" ]  || echo "$HORIZON_URL" | grep -Eqx 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' || fail "horizon_url: an http(s) URL"
           [ -n "$VERSION" ] || VERSION=build-$GITHUB_RUN_NUMBER
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "IMAGE_NAME=$PROFILE-$VERSION" >> "$GITHUB_ENV"
@@ -140,6 +146,22 @@ jobs:
             printf '\n# set by the build-image workflow\nSESSION_0_TYPE=%s\n' "$SESSION_TYPE" \
               | sudo tee -a "$DEFCONF" >/dev/null
             echo "SESSION_0_TYPE=$SESSION_TYPE appended to $DEFCONF"
+          fi
+
+          # The Horizon client cannot live in git. With a URL the build fetches
+          # it; without one the package is dropped, and so is horizon-client
+          # from what verify-image expects.
+          if grep -Eq '^[[:space:]]*package[[:space:]]+horizon([[:space:]]|$)' "$CONF"; then
+            if [ -n "$HORIZON_URL" ]; then
+              sudo sed -i "s|^[[:space:]]*param[[:space:]]\+horizonurl[[:space:]].*|param horizonurl     $HORIZON_URL|" "$CONF"
+              echo "horizon: fetching the client from the given URL"
+            else
+              echo "::warning::no horizon_url given; building without the Omnissa Horizon client"
+              sudo sed -i -E 's/^[[:space:]]*package[[:space:]]+horizon([[:space:]]|$)/#&/; s/^[[:space:]]*param[[:space:]]+horizonurl[[:space:]]/#&/' "$CONF"
+              if [ -f "conf/$PROFILE/verify" ]; then
+                sudo sed -i 's/ horizon-client//' "conf/$PROFILE/verify"
+              fi
+            fi
           fi
 
           echo "--- selected packages ---"

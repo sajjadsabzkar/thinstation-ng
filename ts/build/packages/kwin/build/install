@@ -1,0 +1,43 @@
+#!/bin/sh
+
+# The heavy half of the window manager pair, active by default the way it is
+# on ThinPro (kwin_x11 at priority 60 in hptc-wm, openbox at 50). tp-session
+# starts it and drops to openbox, which this package depends on, when kwin
+# cannot run on the hardware.
+#
+# The build's library closure only follows ELF NEEDED entries. kwin loads a
+# great deal more at run time -- Qt's xcb platform plugin, KWindowSystem's
+# X11 plugin, its own plugins, the decoration plugin, QML modules -- so every
+# package in its closure is exploded here, not just kwin-x11. Left out:
+# documentation, the Breeze icon sets (tens of MB, kwin needs none of them),
+# and the optional services dnf adds as weak dependencies.
+#
+# The window decoration is Aurorae's Plastik theme (aurorae, 0.6 MB). The
+# Breeze decoration would have doubled the package: plasma-breeze pulls in
+# 95 more packages and 220 MB.
+#
+#   kwin-x11 closure + aurorae   75 packages, 208 MB installed
+
+export PACKAGE="kwin"
+export PORTS="kwin-x11 kwin-x11-libs aurorae kdecoration kscreenlocker kglobalacceld
+qt6-qtbase-gui qt6-qtdeclarative qt6-qtsvg qt6-qt5compat
+kf6-attica kf6-kauth kf6-kbookmarks kf6-kcmutils kf6-kcodecs kf6-kcolorscheme
+kf6-kcompletion kf6-kconfig kf6-kconfigwidgets kf6-kcoreaddons kf6-kcrash
+kf6-kdbusaddons kf6-kdeclarative kf6-kdnssd kf6-kglobalaccel kf6-kguiaddons
+kf6-kholidays kf6-ki18n kf6-kiconthemes kf6-kidletime kf6-kidletime-x11
+kf6-kio-core kf6-kio-core-libs kf6-kio-file-widgets kf6-kio-gui kf6-kio-widgets
+kf6-kio-widgets-libs kf6-kirigami kf6-kitemviews kf6-kjobwidgets kf6-knewstuff
+kf6-knotifications kf6-kpackage kf6-kservice kf6-ksvg kf6-kwallet kf6-kwallet-libs
+kf6-kwidgetsaddons kf6-kwindowsystem kf6-kxmlgui kf6-solid kf6-syndication
+kf6-syntax-highlighting kdsoap6 kdsoap-ws-discovery-client knighttime
+layer-shell-qt libkexiv2-qt6 libkscreen libplasma plasma-activities
+plasma-activities-stats polkit-qt6-1 qaccessibilityclient-qt6 qca-qt6 qca-qt6-ossl taglib"
+export DROP_FILES=""
+# /usr/share lands in lib64 after repackage relocates it.
+export DROP_DIRS="lib64/doc lib64/man lib64/locale lib64/help lib64/metainfo lib64/knsrcfiles"
+export CREATE_EMPTY_DIRS=""
+repackage -e
+
+returnval=$?
+
+exit $returnval

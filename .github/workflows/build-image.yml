@@ -178,10 +178,12 @@ jobs:
       - name: Install the build chroot
         run: |
           sudo docker run --rm --privileged -v "$WORK:/thinstation" -w /thinstation "$FEDORA" bash -c '
-            set -o pipefail
             dnf -y -q install util-linux psmisc procps-ng findutils which \
-                              tar xz cpio dbus-tools >/dev/null
+                              tar xz cpio dbus-tools >/dev/null || exit 1
+            # Not pipefail: yes dies of SIGPIPE (141) whenever setup-chroot
+            # exits, so only the status of setup-chroot counts.
             yes Y | ./setup-chroot -i
+            exit ${PIPESTATUS[1]}
           ' 2>&1 | sudo tee "$WORK/install.log" >/dev/null
           rc=${PIPESTATUS[0]}
           # The full log is thousands of lines of dnf; show the milestones.
@@ -193,13 +195,14 @@ jobs:
         run: |
           sudo docker run --rm --privileged -v "$WORK:/thinstation" -w /thinstation \
             -e BUILD_OPTIONS "$FEDORA" bash -c '
-            set -o pipefail
-            dnf -y -q install util-linux psmisc procps-ng findutils which >/dev/null
+            dnf -y -q install util-linux psmisc procps-ng findutils which >/dev/null || exit 1
+            # See the install step: only the status of setup-chroot counts.
             if [ -n "$BUILD_OPTIONS" ]; then
               yes Y | ./setup-chroot -b -o $BUILD_OPTIONS
             else
               yes Y | ./setup-chroot -b
             fi
+            exit ${PIPESTATUS[1]}
           ' 2>&1 | sudo tee "$WORK/build.log" | tail -60
           rc=${PIPESTATUS[0]}
           grep -q "Build Aborted" "$WORK/build.log" && { echo "::error::build aborted, see build.log"; exit 1; }

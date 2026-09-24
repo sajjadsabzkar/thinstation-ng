@@ -5,7 +5,9 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QCoreApplication>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -157,6 +159,10 @@ void PanelForm::loadSpec()
         f.command      = m_reg->value(base + QLatin1String("command"));
         f.confirm      = m_reg->value(base + QLatin1String("confirm"));
         f.buttonText   = m_reg->value(base + QLatin1String("buttonText"), f.label);
+        f.prompt       = m_reg->value(base + QLatin1String("prompt"));
+        f.promptSecret = truthy(m_reg->value(base + QLatin1String("promptSecret")));
+        f.restartOnSuccess =
+            truthy(m_reg->value(base + QLatin1String("restartOnSuccess")));
         f.timeout      = m_reg->value(base + QLatin1String("timeout"),
                                       QLatin1String("300")).toInt();
         f.min          = m_reg->value(base + QLatin1String("min"),
@@ -428,6 +434,17 @@ void PanelForm::runAction(const PanelField &f)
                                  QMessageBox::No) != QMessageBox::Yes)
         return;
 
+    QByteArray input;
+    if (!f.prompt.isEmpty()) {
+        bool ok = false;
+        const QString answer = QInputDialog::getText(this, f.label, f.prompt,
+            f.promptSecret ? QLineEdit::Password : QLineEdit::Normal,
+            QString(), &ok);
+        if (!ok)
+            return;
+        input = answer.toLocal8Bit() + '\n';
+    }
+
     QPushButton *button = qobject_cast<QPushButton *>(m_widgets.value(f.name));
     if (button)
         button->setEnabled(false);
@@ -440,8 +457,12 @@ void PanelForm::runAction(const PanelField &f)
 
     bool started = p.waitForStarted(5000);
     bool finished = false;
-    if (started)
+    if (started) {
+        if (!input.isEmpty())
+            p.write(input);
+        p.closeWriteChannel();
         finished = p.waitForFinished(f.timeout > 0 ? f.timeout * 1000 : -1);
+    }
 
     if (started && !finished) {
         p.kill();
@@ -467,6 +488,19 @@ void PanelForm::runAction(const PanelField &f)
     }
 
     const bool ok = (p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0);
+
+    // Administrator mode decides which panels exist, so the program that
+    // shows them has to start over to show the other set. --admin/--user
+    // would pin the old mode, so they do not go along.
+    if (ok && f.restartOnSuccess) {
+        QStringList args = QCoreApplication::arguments().mid(1);
+        args.removeAll(QLatin1String("--admin"));
+        args.removeAll(QLatin1String("--user"));
+        if (QProcess::startDetached(QCoreApplication::applicationFilePath(), args)) {
+            QCoreApplication::quit();
+            return;
+        }
+    }
 
     // Show the output whatever the exit code: for something like the task
     // manager the output *is* the point, and for a failure it is the only

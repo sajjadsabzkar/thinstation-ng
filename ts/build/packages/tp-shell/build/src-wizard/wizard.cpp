@@ -1,4 +1,5 @@
 #include "wizard.h"
+#include "tpstyle.h"
 #include "registry.h"
 
 #include <QApplication>
@@ -9,6 +10,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
@@ -58,8 +60,19 @@ static const char *kReassurance =
     QT_TRANSLATE_NOOP("Wizard", "You can customize it later, don't worry.");
 
 Wizard::Wizard(Registry *reg, QWidget *parent)
-    : QWidget(parent), m_reg(reg), m_language(0), m_check(0), m_checkDone(false)
+    : QWidget(parent), m_reg(reg), m_language(0),
+      m_keyboardFilter(0), m_keyboard(0), m_check(0), m_checkDone(false)
 {
+    // One large glyph per step. Emoji are in neither Liberation nor DejaVu,
+    // so each has plainer stand-ins, and TpStyle::glyph takes the first the
+    // fonts can draw.
+    static const char *const kbGlyphs[]   = { "\xe2\x8c\xa8", "\xf0\x9f\x96\xae", "A", 0 };
+    static const char *const netGlyphs[]  = { "\xf0\x9f\x93\xa1", "\xf0\x9f\x96\xa7",
+                                              "\xe2\x87\x85", "\xe2\x86\x94", 0 };
+    static const char *const timeGlyphs[] = { "\xf0\x9f\x95\x92", "\xe2\x8f\xb2",
+                                              "\xe2\x8c\x9a", "\xe2\x97\xb7", 0 };
+    static const char *const hwGlyphs[]   = { "\xe2\x9a\x99", "\xe2\x9c\x93", 0 };
+
     setWindowTitle(tr("Initial Setup"));
 
     QVBoxLayout *outer = new QVBoxLayout(this);
@@ -74,25 +87,25 @@ Wizard::Wizard(Registry *reg, QWidget *parent)
     m_pages->addWidget(buildSplitPage(
         tr("Select the standard keyboard format:"), buildKeyboardBody(),
         tr("Keyboard"), tr("Select the default keyboard layout"),
-        QString::fromUtf8("\xe2\x8c\xa8"), &back, &next));
+        TpStyle::glyph(font(), kbGlyphs), &back, &next));
     m_backButtons.append(back); m_nextButtons.append(next);
 
     m_pages->addWidget(buildSplitPage(
         tr("Select a network connection:"), buildNetworkBody(),
         tr("Network"), tr("Select the default network"),
-        QString::fromUtf8("\xf0\x9f\x93\xa1"), &back, &next));
+        TpStyle::glyph(font(), netGlyphs), &back, &next));
     m_backButtons.append(back); m_nextButtons.append(next);
 
     m_pages->addWidget(buildSplitPage(
         tr("Select the appropriate timezone:"), buildDateTimeBody(),
         tr("Date & Time"), tr("Set the system date and time"),
-        QString::fromUtf8("\xf0\x9f\x95\x92"), &back, &next));
+        TpStyle::glyph(font(), timeGlyphs), &back, &next));
     m_backButtons.append(back); m_nextButtons.append(next);
 
     m_pages->addWidget(buildSplitPage(
         tr("Check this hardware:"), buildCheckBody(),
         tr("Hardware"), tr("See what this client can do"),
-        QString::fromUtf8("\xe2\x9a\x99"), &back, &next));
+        TpStyle::glyph(font(), hwGlyphs), &back, &next));
     m_backButtons.append(back); m_nextButtons.append(next);
 
     m_pages->addWidget(buildDonePage());
@@ -144,30 +157,24 @@ QWidget *Wizard::buildCoverPage()
     langs->setHorizontalSpacing(24);
     langs->setVerticalSpacing(10);
 
-    const QFontMetrics metrics(page->font());
     int shown = 0;
     for (int i = 0; kLanguages[i].code; ++i) {
         const QString name = QString::fromUtf8(kLanguages[i].name);
 
-        // Only offer a language this image can actually draw. The build
-        // drops the CJK and Arabic font packages to keep the image small,
-        // and a row of empty boxes is a worse answer than a shorter list:
-        // nobody can pick a language whose name they cannot read.
-        bool renderable = true;
-        for (int c = 0; c < name.size(); ++c) {
-            const QChar ch = name.at(c);
-            if (ch.isSpace() || ch.isPunct())
-                continue;
-            if (!metrics.inFont(ch)) {
-                renderable = false;
-                break;
-            }
-        }
-        if (!renderable && i != 0)
-            continue;
-
         QPushButton *b = new QPushButton(name, page);
         b->setObjectName(QLatin1String("tpLanguageChoice"));
+
+        // Only offer a language this image can actually draw, in the font
+        // the button will really use once the stylesheet has had its say.
+        // The build carries no CJK font, and a row of empty boxes is a
+        // worse answer than a shorter list: nobody can pick a language
+        // whose name they cannot read.
+        b->ensurePolished();
+        if (i != 0 && !TpStyle::drawable(name, b->font())) {
+            delete b;
+            continue;
+        }
+
         b->setFlat(true);
         b->setCursor(Qt::PointingHandCursor);
         b->setProperty("tpIndex", i);
@@ -212,11 +219,39 @@ void Wizard::selectLanguage(int index)
 
     // The keyboard follows the language until someone changes it by hand.
     if (m_keyboard && index >= 0 && kLanguages[index].code) {
-        const int kb = m_keyboard->findText(
-            QString::fromLatin1(kLanguages[index].keyboard));
-        if (kb >= 0)
-            m_keyboard->setCurrentIndex(kb);
+        const QString kb = QString::fromLatin1(kLanguages[index].keyboard);
+        for (int i = 0; i < m_keyboard->count(); ++i) {
+            QListWidgetItem *item = m_keyboard->item(i);
+            if (item->data(Qt::UserRole).toString() == kb) {
+                m_keyboard->setCurrentItem(item);
+                m_keyboard->scrollToItem(item, QAbstractItemView::PositionAtCenter);
+                break;
+            }
+        }
     }
+}
+
+void Wizard::onKeyboardFilter(const QString &text)
+{
+    const QString needle = text.trimmed();
+    QListWidgetItem *firstShown = 0;
+    for (int i = 0; i < m_keyboard->count(); ++i) {
+        QListWidgetItem *item = m_keyboard->item(i);
+        const bool match = needle.isEmpty()
+            || item->text().contains(needle, Qt::CaseInsensitive)
+            || item->data(Qt::UserRole).toString()
+                   .startsWith(needle, Qt::CaseInsensitive);
+        item->setHidden(!match);
+        if (match && !firstShown)
+            firstShown = item;
+    }
+    // Keep a visible row selected, so Next never commits a layout the
+    // filter has hidden.
+    QListWidgetItem *current = m_keyboard->currentItem();
+    if ((!current || current->isHidden()) && firstShown)
+        m_keyboard->setCurrentItem(firstShown);
+    if (m_keyboard->currentItem())
+        m_keyboard->scrollToItem(m_keyboard->currentItem());
 }
 
 // ---------------------------------------------------------------------------
@@ -351,28 +386,49 @@ QWidget *Wizard::buildKeyboardBody()
     QWidget *body = new QWidget(this);
     QVBoxLayout *v = new QVBoxLayout(body);
     v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(10);
 
-    m_keyboard = new QComboBox(body);
-    m_keyboard->setEditable(true);
-    m_keyboard->setMinimumHeight(46);
+    m_keyboardFilter = new QLineEdit(body);
+    m_keyboardFilter->setPlaceholderText(tr("Search"));
+    m_keyboardFilter->setClearButtonEnabled(true);
+    m_keyboardFilter->setMinimumHeight(40);
+    v->addWidget(m_keyboardFilter);
 
-    // Offer whatever xkb actually has, falling back to the layouts the
-    // language list knows about on an image without the xkb data.
+    m_keyboard = new QListWidget(body);
+    // The form is narrow; long layout names wrap rather than grow a
+    // horizontal scroll bar.
+    m_keyboard->setWordWrap(true);
+    m_keyboard->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    v->addWidget(m_keyboard, 1);
+
+    // Every layout xkb knows, by name, the way the Keyboard panel lists
+    // them. The language table's own layouts stand in on an image without
+    // the xkb rules.
     const QString layouts = HwCheck::runCommand(QLatin1String(
-        "ls -1 /usr/share/X11/xkb/symbols 2>/dev/null "
-        "| grep -vE '^(group|level|srvr_ctrl|keypad|capslock|ctrl|shift|"
-        "altwin|compose|eurosign|nbsp|pc|inet|typo|terminate)$' | sort"), 6000);
-    if (!layouts.isEmpty())
-        m_keyboard->addItems(layouts.split(QLatin1Char('\n'), Qt::SkipEmptyParts));
-    else
+        "sed -n '/^! layout/,/^$/p' /usr/share/X11/xkb/rules/base.lst 2>/dev/null "
+        "| awk 'NR>1 && NF { c = $1; $1 = \"\"; sub(/^ +/, \"\"); "
+        "printf \"%s\\t%s\\n\", c, $0 }' | sort -f -k2"), 6000);
+    const QStringList rows = layouts.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (int i = 0; i < rows.size(); ++i) {
+        const QString code = rows.at(i).section(QLatin1Char('\t'), 0, 0).trimmed();
+        const QString name = rows.at(i).section(QLatin1Char('\t'), 1).trimmed();
+        if (code.isEmpty())
+            continue;
+        QListWidgetItem *item = new QListWidgetItem(
+            name.isEmpty() ? code : name, m_keyboard);
+        item->setData(Qt::UserRole, code);
+    }
+    if (m_keyboard->count() == 0)
         for (int i = 0; kLanguages[i].code; ++i) {
             const QString kb = QString::fromLatin1(kLanguages[i].keyboard);
-            if (m_keyboard->findText(kb) < 0)
-                m_keyboard->addItem(kb);
+            if (m_keyboard->findItems(kb, Qt::MatchExactly).isEmpty()) {
+                QListWidgetItem *item = new QListWidgetItem(kb, m_keyboard);
+                item->setData(Qt::UserRole, kb);
+            }
         }
 
-    v->addWidget(m_keyboard);
-    v->addStretch(1);
+    connect(m_keyboardFilter, SIGNAL(textChanged(QString)),
+            this, SLOT(onKeyboardFilter(QString)));
     return body;
 }
 
@@ -414,10 +470,15 @@ QWidget *Wizard::buildDateTimeBody()
     m_zoneArea->setMinimumHeight(46);
     m_zoneCity->setMinimumHeight(46);
 
+    // zone1970.tab lists the zones people pick from, one per region, with
+    // none of the aliases and none of the files beside them. The old
+    // `find zoneinfo/posix -type f` found nothing once tzdata made posix a
+    // symlink to ".".
     const QString zones = HwCheck::runCommand(QLatin1String(
-        "find /usr/share/zoneinfo/posix -type f 2>/dev/null "
-        "| sed 's|/usr/share/zoneinfo/posix/||' | sort"), 8000);
-    const QStringList all = zones.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        "awk '!/^#/ && NF >= 3 {print $3}' /usr/share/zoneinfo/zone1970.tab "
+        "2>/dev/null | sort -u"), 8000);
+    QStringList all = zones.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    all.prepend(QLatin1String("UTC"));
 
     QStringList areas;
     for (int i = 0; i < all.size(); ++i) {
@@ -438,8 +499,14 @@ QWidget *Wizard::buildDateTimeBody()
         if (m_zoneCity->count() == 0)
             m_zoneCity->addItem(QString());
     });
-    if (!areas.isEmpty())
-        m_zoneArea->setCurrentIndex(0);
+    // Start at the zone the client already has, so pressing Next keeps it.
+    const QString current = m_reg->value(QLatin1String("root/time/timezone"),
+                                         QLatin1String("UTC"));
+    const int areaAt = m_zoneArea->findText(current.section(QLatin1Char('/'), 0, 0));
+    m_zoneArea->setCurrentIndex(areaAt >= 0 ? areaAt : 0);
+    const int cityAt = m_zoneCity->findText(current.section(QLatin1Char('/'), 1));
+    if (cityAt >= 0)
+        m_zoneCity->setCurrentIndex(cityAt);
 
     v->addWidget(m_zoneArea);
     v->addWidget(m_zoneCity);
@@ -461,6 +528,8 @@ QWidget *Wizard::buildCheckBody()
     v->addWidget(m_checkProgress);
 
     m_checkList = new QListWidget(body);
+    m_checkList->setWordWrap(true);
+    m_checkList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     v->addWidget(m_checkList, 1);
 
     m_checkSummary = new QLabel(body);
@@ -575,7 +644,9 @@ void Wizard::showPage(int index)
     // to fix up is what the last one's Next button says.
     const int split = index - PageKeyboard;
     if (split >= 0 && split < m_backButtons.size()) {
-        m_backButtons.at(split)->setEnabled(index > PageKeyboard);
+        // The first split page goes back to the cover, where the language
+        // is chosen: that choice is no more final than any other here.
+        m_backButtons.at(split)->setEnabled(true);
 
         if (index == PageNetwork && m_interfaces && m_interfaces->count() == 0)
             m_nextButtons.at(split)->setText(tr("Skip"));
@@ -693,8 +764,9 @@ void Wizard::commit()
                         QString::fromLatin1(kLanguages[m_language].code));
     m_reg->setValue(QLatin1String("root/i18n/locale"),
                     QString::fromLatin1(kLanguages[m_language].code));
-    m_reg->setValue(QLatin1String("root/keyboard/layout"),
-                    m_keyboard->currentText());
+    if (m_keyboard->currentItem())
+        m_reg->setValue(QLatin1String("root/keyboard/layout"),
+                        m_keyboard->currentItem()->data(Qt::UserRole).toString());
 
     QString zone = m_zoneArea->currentText();
     if (!m_zoneCity->currentText().isEmpty())

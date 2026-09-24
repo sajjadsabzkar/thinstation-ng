@@ -26,6 +26,15 @@
 //   root/ControlPanel/<panel>/fields/<f>/confirm   asked first; empty = no ask
 //   root/ControlPanel/<panel>/fields/<f>/buttonText  defaults to the label
 //   root/ControlPanel/<panel>/fields/<f>/timeout   seconds, default 300
+//   root/ControlPanel/<panel>/fields/<f>/prompt    asked for before running;
+//                                                 the answer goes to stdin
+//   root/ControlPanel/<panel>/fields/<f>/promptSecret  1 = mask the answer
+//   root/ControlPanel/<panel>/fields/<f>/restartOnSuccess  1 = restart the
+//                  program afterwards, for actions (administrator mode) that
+//                  change what it shows
+//
+// The command's stdin is always closed, with or without a prompt: a script
+// that reads stdin gets EOF instead of hanging the panel until the timeout.
 //
 // Actions are never written back to the registry and never reach the apply
 // hook: the command is the whole of their effect.
@@ -60,13 +69,17 @@ struct PanelField {
     QString command;
     QString confirm;
     QString buttonText;
+    QString prompt;
+    bool promptSecret;
+    bool restartOnSuccess;
     QStringList choices;
     int min;
     int max;
     int step;
     int timeout;
 
-    PanelField() : min(0), max(100), step(1), timeout(300) {}
+    PanelField() : promptSecret(false), restartOnSuccess(false),
+                   min(0), max(100), step(1), timeout(300) {}
 };
 
 class PanelForm : public QDialog

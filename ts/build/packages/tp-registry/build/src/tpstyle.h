@@ -35,6 +35,16 @@ void apply(QApplication *app);
 // space blank rather than draw a box.
 QString glyph(const QFont &font, const char *const *candidates);
 
+// True when every character of text comes out as a real glyph in font,
+// fallback fonts included, rather than as the empty box.
+//
+// QFontMetrics::inFont() is not enough to decide that. With only DejaVu
+// carrying Arabic script, inFont() said yes for Persian and Arabic, and Qt
+// still drew boxes: its fallback never reached DejaVu from a Liberation
+// Sans button. This lays the text out the way it will be painted and looks
+// for glyph 0, which is what a box is.
+bool drawable(const QString &text, const QFont &font);
+
 }
 
 #endif

@@ -33,6 +33,7 @@ class Registry;
 class QComboBox;
 class QFrame;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QProgressBar;
 class QPushButton;
@@ -52,6 +53,7 @@ private slots:
     void onCheckFinished();
     void onRefreshNetwork();
     void onLanguageClicked();
+    void onKeyboardFilter(const QString &text);
 
 private:
     // The full-width pages.
@@ -92,7 +94,10 @@ private:
     QVector<QPushButton *> m_languageButtons;
     int             m_language;
 
-    QComboBox      *m_keyboard;
+    // A list, not a drop-down: a hundred-odd layouts read better laid out
+    // than folded away, and the filter above it finds one by name or code.
+    QLineEdit      *m_keyboardFilter;
+    QListWidget    *m_keyboard;
     QComboBox      *m_zoneArea;
     QComboBox      *m_zoneCity;
 

@@ -300,9 +300,10 @@ void KioskPanel::onSwitchMode()
 
     // Checked against the real account, not against anything in the
     // registry: a password stored in a settings file is not a password.
+    // tp-switch-admin does the checking for the control panel too, so the
+    // two cannot disagree; "check" leaves the registry to us.
     QProcess p;
-    p.start(QLatin1String("/bin/sh"), QStringList() << QLatin1String("-c")
-            << QLatin1String("sudo -k -S -p '' true"));
+    p.start(QLatin1String("tp-switch-admin"), QStringList() << QLatin1String("check"));
     if (!p.waitForStarted(3000)) {
         QMessageBox::warning(this, tr("Switch to Administrator"),
                              tr("Could not verify the password."));
@@ -310,9 +311,10 @@ void KioskPanel::onSwitchMode()
     }
     p.write(password.toLocal8Bit() + "\n");
     p.closeWriteChannel();
-    p.waitForFinished(8000);
+    // su waits a few seconds before it says no.
+    p.waitForFinished(15000);
 
-    if (p.exitCode() != 0) {
+    if (p.exitStatus() != QProcess::NormalExit || p.exitCode() != 0) {
         QMessageBox::warning(this, tr("Switch to Administrator"),
                              tr("That password was not accepted."));
         return;

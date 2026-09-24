@@ -1,0 +1,5 @@
+#!/bin/sh
+
+export PACKAGE=fonts-TTF-vazirmatn
+repackage -c
+

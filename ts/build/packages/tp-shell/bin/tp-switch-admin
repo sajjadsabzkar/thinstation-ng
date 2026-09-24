@@ -1,10 +1,16 @@
 #!/bin/sh
 # Enters or leaves administrator mode.
 #
-# The password is checked against the real account through sudo, not against
+#   tp-switch-admin enter    password on stdin; sets adminMode when it is right
+#   tp-switch-admin check    password on stdin; only says whether it is right
+#   tp-switch-admin leave
+#
+# The password is root's, checked against the real account, not against
 # anything in the registry: a password kept in a settings file is not a
-# password. This is the same check the kiosk panel's button makes, kept in
-# one place so both agree.
+# password. The image has no sudo, so the check is su, which here is
+# busybox's (setuid root). It reads the password from stdin, so a GUI can
+# pipe it in, and it fails at once on an empty stdin rather than waiting
+# for a terminal that is not there.
 
 . /etc/thinstation.global 2>/dev/null
 
@@ -17,38 +23,45 @@ leave)
 	echo "Back in user mode."
 	exit 0
 	;;
-enter)
+enter|check)
 	;;
 *)
-	echo "usage: tp-switch-admin enter|leave" >&2
+	echo "usage: tp-switch-admin enter|check|leave" >&2
 	exit 2
 	;;
 esac
 
-if [ "`id -u`" = "0" ]; then
-	tpreg set "$KEY" 1
+granted()
+{
+	[ "$1" = enter ] && tpreg set "$KEY" 1
 	echo "Administrator mode."
 	exit 0
+}
+
+[ "`id -u`" = "0" ] && granted "$1"
+
+# Prompt only when someone is actually at a terminal. From a GUI the
+# password arrives on stdin and a prompt would only end up in the output.
+if [ -t 0 ]; then
+	printf 'Administrator password: ' >&2
+	stty -echo 2>/dev/null
+	read -r password
+	stty echo 2>/dev/null
+	printf '\n' >&2
+else
+	read -r password
 fi
 
-# Already allowed to escalate without being asked? Then there is nothing to
-# prove and asking for a password would only be theatre.
-if sudo -n true 2>/dev/null; then
-	tpreg set "$KEY" 1
-	echo "Administrator mode."
-	exit 0
-fi
-
-printf 'Administrator password: ' >&2
-stty -echo 2>/dev/null
-read -r password
-stty echo 2>/dev/null
-printf '\n' >&2
-
-if printf '%s\n' "$password" | sudo -k -S -p '' true 2>/dev/null; then
-	tpreg set "$KEY" 1
-	echo "Administrator mode."
-	exit 0
+if [ -n "$password" ]; then
+	# su prints its own prompt and verdict; the caller wants ours.
+	if printf '%s\n' "$password" | su root -c true >/dev/null 2>&1; then
+		granted "$1"
+	fi
+	# Some images carry sudo with the session user in wheel instead.
+	if command -v sudo >/dev/null 2>&1 \
+	    && printf '%s\n' "$password" | sudo -k -S -p '' true >/dev/null 2>&1; then
+		granted "$1"
+	fi
 fi
 
 echo "That password was not accepted." >&2

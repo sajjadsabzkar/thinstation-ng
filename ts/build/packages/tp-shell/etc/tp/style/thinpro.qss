@@ -215,10 +215,9 @@ QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {
     border: 2px solid #F2F2F2;
 }
 
-QComboBox::drop-down {
-    border: none;
-    width: 22px;
-}
+/* No QComboBox::drop-down rule: styling that subcontrol without also
+   giving ::down-arrow an image makes Qt drop the arrow entirely, and every
+   combo box then looks like a text field. Fusion's own arrow is fine. */
 
 QComboBox QAbstractItemView {
     background: white;

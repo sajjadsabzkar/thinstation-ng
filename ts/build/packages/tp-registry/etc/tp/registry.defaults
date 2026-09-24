@@ -265,7 +265,7 @@ root/ControlPanel/keyboard/fields/layout/label=Layout
 root/ControlPanel/keyboard/fields/layout/type=choice
 root/ControlPanel/keyboard/fields/layout/section=Primary
 root/ControlPanel/keyboard/fields/layout/key=root/keyboard/layout
-root/ControlPanel/keyboard/fields/layout/choicesCommand=sed -n '/^! layout/,/^$/p' /usr/share/X11/xkb/rules/base.lst 2>/dev/null | awk 'NR>1 && NF {print $1}'
+root/ControlPanel/keyboard/fields/layout/choicesCommand=sed -n '/^! layout/,/^$/p' /usr/share/X11/xkb/rules/base.lst 2>/dev/null | awk 'NR>1 && NF { c = $1; $1 = ""; sub(/^ +/, ""); printf "%s\t%s\n", c, $0 }' | sort -f -k2
 root/ControlPanel/keyboard/fields/layout/default=us
 root/ControlPanel/keyboard/fields/variant/label=Variant
 root/ControlPanel/keyboard/fields/variant/type=text
@@ -329,7 +329,7 @@ root/ControlPanel/datetime/fields/timezone/label=Time zone
 root/ControlPanel/datetime/fields/timezone/type=choice
 root/ControlPanel/datetime/fields/timezone/section=Timezone
 root/ControlPanel/datetime/fields/timezone/key=root/time/timezone
-root/ControlPanel/datetime/fields/timezone/choicesCommand=find /usr/share/zoneinfo/posix -type f 2>/dev/null | sed 's|/usr/share/zoneinfo/posix/||' | sort
+root/ControlPanel/datetime/fields/timezone/choicesCommand={ echo UTC; awk '!/^#/ && NF >= 3 {print $3}' /usr/share/zoneinfo/zone1970.tab 2>/dev/null | sort -u; }
 root/ControlPanel/datetime/fields/timezone/default=UTC
 root/ControlPanel/datetime/fields/useNtp/label=Set the clock from a time server
 root/ControlPanel/datetime/fields/useNtp/type=bool
@@ -683,10 +683,15 @@ root/ControlPanel/switchadmin/fields/enter/label=Enter administrator mode
 root/ControlPanel/switchadmin/fields/enter/type=action
 root/ControlPanel/switchadmin/fields/enter/buttonText=Enter administrator mode
 root/ControlPanel/switchadmin/fields/enter/command=tp-switch-admin enter
+root/ControlPanel/switchadmin/fields/enter/prompt=Administrator password:
+root/ControlPanel/switchadmin/fields/enter/promptSecret=1
+root/ControlPanel/switchadmin/fields/enter/restartOnSuccess=1
+root/ControlPanel/switchadmin/fields/enter/timeout=30
 root/ControlPanel/switchadmin/fields/leave/label=Leave administrator mode
 root/ControlPanel/switchadmin/fields/leave/type=action
 root/ControlPanel/switchadmin/fields/leave/buttonText=Return to user mode
 root/ControlPanel/switchadmin/fields/leave/command=tp-switch-admin leave
+root/ControlPanel/switchadmin/fields/leave/restartOnSuccess=1
 
 # --- SSHD Manager (ThinPro: hptc-sshd-mgr, Manageability) ------------------
 root/sshd/enabled=0
@@ -872,7 +877,7 @@ root/ControlPanel/language/fields/locale/hint=Takes effect at the next login
 root/ControlPanel/language/fields/keyboard/label=Keyboard layout
 root/ControlPanel/language/fields/keyboard/type=choice
 root/ControlPanel/language/fields/keyboard/key=root/keyboard/layout
-root/ControlPanel/language/fields/keyboard/choicesCommand=ls -1 /usr/share/X11/xkb/symbols 2>/dev/null | grep -vE '^(group|level|srvr_ctrl|keypad|capslock|ctrl|shift|altwin|compose|eurosign|nbsp|pc|inet|typo|terminate)' | head -60
+root/ControlPanel/language/fields/keyboard/choicesCommand=sed -n '/^! layout/,/^$/p' /usr/share/X11/xkb/rules/base.lst 2>/dev/null | awk 'NR>1 && NF { c = $1; $1 = ""; sub(/^ +/, ""); printf "%s\t%s\n", c, $0 }' | sort -f -k2
 root/ControlPanel/language/fields/current/label=Now
 root/ControlPanel/language/fields/current/type=info
 root/ControlPanel/language/fields/current/valueCommand=echo "${LANG:-not set}"

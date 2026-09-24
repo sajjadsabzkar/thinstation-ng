@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Persian and Arabic. DejaVu Sans has the letters, but Qt never falls back
+# to it from a Liberation Sans widget, so فارسی came out as boxes. Vazirmatn
+# is the usual Persian UI face, and as a variable font it is 290 KB.
+
+export PACKAGE="fonts-TTF-vazirmatn"
+export PORTS="vazirmatn-vf-fonts"
+export DROP_FILES=""
+export DROP_DIRS="lib64/doc lib64/licenses"
+export CREATE_EMPTY_DIRS=""
+repackage -e
+
+returnval=$?
+
+exit $returnval

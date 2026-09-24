@@ -75,7 +75,7 @@ void HwCheck::checkCpu()
 
     QString detail = model.isEmpty() ? tr("unknown") : model;
     if (!cores.isEmpty())
-        detail += tr(", %1 core(s)", "", cores.toInt());
+        detail += tr(", %n core(s)", "", cores.toInt());
 
     // The image is built for x86-64-baseline on purpose, so anything 64-bit
     // will run it. Say so rather than leaving the user guessing.

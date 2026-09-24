@@ -1,6 +1,7 @@
 #include "tpstyle.h"
 
-#include <QFontMetrics>
+#include <QGlyphRun>
+#include <QTextLayout>
 
 #include <QApplication>
 #include <QByteArray>
@@ -37,21 +38,33 @@ void apply(QApplication *app)
 
 }
 
+bool TpStyle::drawable(const QString &text, const QFont &font)
+{
+    if (text.trimmed().isEmpty())
+        return true;
+
+    QTextLayout layout(text, font);
+    layout.beginLayout();
+    layout.createLine();
+    layout.endLayout();
+
+    const QList<QGlyphRun> runs = layout.glyphRuns();
+    if (runs.isEmpty())
+        return false;
+    for (int r = 0; r < runs.size(); ++r) {
+        const QVector<quint32> glyphs = runs.at(r).glyphIndexes();
+        for (int g = 0; g < glyphs.size(); ++g)
+            if (glyphs.at(g) == 0)
+                return false;
+    }
+    return true;
+}
+
 QString TpStyle::glyph(const QFont &font, const char *const *candidates)
 {
-    const QFontMetrics metrics(font);
     for (int i = 0; candidates && candidates[i]; ++i) {
         const QString candidate = QString::fromUtf8(candidates[i]);
-        if (candidate.isEmpty())
-            continue;
-
-        // Anything above the BMP arrives as a surrogate pair, and inFont()
-        // only takes a QChar, so ask by code point instead.
-        const uint ucs4 = (candidate.at(0).isHighSurrogate() && candidate.size() > 1)
-            ? QChar::surrogateToUcs4(candidate.at(0), candidate.at(1))
-            : candidate.at(0).unicode();
-
-        if (metrics.inFontUcs4(ucs4))
+        if (!candidate.isEmpty() && drawable(candidate, font))
             return candidate;
     }
     return QString();

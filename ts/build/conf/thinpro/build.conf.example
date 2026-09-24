@@ -259,7 +259,10 @@ package locale-en_US         # English (US)
 #############################
 ### --- Date and Time --- ###
 #############################
-#package alltimezones         # Include all zoneinfo files instead of only what is defined in .buildtime
+# The wizard and the Date & Time panel offer every zone; without this the
+# image carries only TIME_ZONE and both lists come up empty. (The stock
+# comment calls it "alltimezones"; the package is alltimezone.) ~6 MB.
+package alltimezone
 #package tzupdate             # Automatically update the timezone based on network location
 #package ntpd                 # Syncronize time with NTP protocal
 
@@ -320,6 +323,7 @@ package terminal             # Terminal emulator for XFCE
 # Packages for font rendering, icon sets, and GTK themes.
 
 package fonts-TTF-liberation # Liberation TrueType fonts
+package fonts-TTF-vazirmatn  # Persian and Arabic (Vazirmatn, 290 KB); Qt will not use DejaVu for them
 #package fonts-TTF-noto       # dropped: Noto is ~300 MB of wide-Unicode coverage; Liberation covers the UI
 
 package icons-cursor         # Cursor theme

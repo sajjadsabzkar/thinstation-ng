@@ -10,7 +10,7 @@ EXPECT_SESSION=openbox
 
 # kwin_x11 is the window manager; openbox is its fallback. horizon-client is
 # the Omnissa client (a CI run without the RPM drops it from this list).
-REQUIRE_BIN="openbox kwin_x11 xprop tp-session tpreg tp-connmgr tp-controlpanel tp-panel tp-taskbar tp-wizard xsetroot horizon-client tp-hwreport tp-diag tp-diag-send logger"
+REQUIRE_BIN="openbox kwin_x11 xprop tp-session tpreg tp-connmgr tp-controlpanel tp-panel tp-taskbar tp-desktop tp-wizard xsetroot horizon-client tp-hwreport tp-diag tp-diag-send logger"
 
 # lib.squash budget. The openbox image was 346 MB; KWin and a trimmed Horizon
 # add roughly 100 MB. The first KWin build shipped Horizon whole and came to

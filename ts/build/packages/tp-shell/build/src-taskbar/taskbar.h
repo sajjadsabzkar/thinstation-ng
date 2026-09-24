@@ -3,11 +3,13 @@
 // This exists because of a bug the first bootable image had: closing the
 // connection manager left a bare root window with no way to get anything
 // back. ThinPro never has that problem because its standard configuration
-// always has a panel with a start menu. So does this now.
+// always has a panel with a menu. So does this now.
 //
-// Deliberately not a window list: on a thin client there is usually one
-// full-screen session and nothing to switch between. What it carries is the
-// start menu, the connection manager, the clock, and the way out.
+// Drawn the way ThinPro 8.1's panel looks: a light strip along the bottom,
+// the hamburger at the left, and at the right the tray -- network,
+// keyboard, volume, display -- then the time over the date. Deliberately
+// not a window list: on a thin client there is usually one full-screen
+// session and nothing to switch between.
 
 #ifndef TP_TASKBAR_H
 #define TP_TASKBAR_H
@@ -35,14 +37,15 @@ private slots:
 private:
     void reserveSpace();
     void buildMenu();
+    QPushButton *trayButton(const char *const *glyphs, const QString &tip,
+                            const QString &command);
     static void launch(const QString &command);
 
     Registry    *m_reg;
     QPushButton *m_start;
-    QPushButton *m_connections;
-    QPushButton *m_controlPanel;
+    QPushButton *m_network;
+    QPushButton *m_keyboard;
     QLabel      *m_clock;
-    QLabel      *m_network;
     QMenu       *m_menu;
 };
 

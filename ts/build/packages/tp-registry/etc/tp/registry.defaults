@@ -827,9 +827,11 @@ root/ControlPanel/thinstate/fields/explain/type=info
 root/ControlPanel/thinstate/fields/explain/valueCommand=echo "Carries settings and connections, not the image. The image is written with the ISO or the .dd file."
 
 # --- Background Manager (ThinPro: hptc-background-mgr, Appearance) ---------
-root/background/mode=colour
+# The desktop shows a picture by default, as ThinPro's does. tp-desktop
+# paints it; the colour is what shows while it loads and in Smart Zero.
+root/background/mode=image
 root/background/colour=#1F2933
-root/background/image=
+root/background/image=/etc/tp/backgrounds/thinpro-ng.jpg
 root/background/imageMode=scale
 
 root/ControlPanel/background/title=Background Manager
@@ -839,7 +841,7 @@ root/ControlPanel/background/fields/mode/type=choice
 root/ControlPanel/background/fields/mode/section=Desktop
 root/ControlPanel/background/fields/mode/key=root/background/mode
 root/ControlPanel/background/fields/mode/choices=colour|image
-root/ControlPanel/background/fields/mode/default=colour
+root/ControlPanel/background/fields/mode/default=image
 root/ControlPanel/background/fields/colour/label=Colour
 root/ControlPanel/background/fields/colour/type=text
 root/ControlPanel/background/fields/colour/section=Desktop
@@ -850,7 +852,7 @@ root/ControlPanel/background/fields/image/label=Image file
 root/ControlPanel/background/fields/image/type=choice
 root/ControlPanel/background/fields/image/section=Desktop
 root/ControlPanel/background/fields/image/key=root/background/image
-root/ControlPanel/background/fields/image/choicesCommand=ls -1 /usr/share/backgrounds/*.png /usr/share/backgrounds/*.jpg /var/lib/tp/backgrounds/* 2>/dev/null
+root/ControlPanel/background/fields/image/choicesCommand=ls -1 /etc/tp/backgrounds/* /usr/share/backgrounds/*.png /usr/share/backgrounds/*.jpg /var/lib/tp/backgrounds/* 2>/dev/null
 root/ControlPanel/background/fields/image/hint=Put your own files in /var/lib/tp/backgrounds
 root/ControlPanel/background/fields/imageMode/label=Fit
 root/ControlPanel/background/fields/imageMode/type=choice
@@ -861,7 +863,7 @@ root/ControlPanel/background/fields/imageMode/default=scale
 root/ControlPanel/background/fields/preview/label=Tools
 root/ControlPanel/background/fields/preview/type=info
 root/ControlPanel/background/fields/preview/section=Desktop
-root/ControlPanel/background/fields/preview/valueCommand=if command -v feh >/dev/null 2>&1; then echo "feh is installed - images will work"; elif command -v xsetroot >/dev/null 2>&1; then echo "only xsetroot is installed - colour works, images do not"; else echo "no tool to paint the root window"; fi
+root/ControlPanel/background/fields/preview/valueCommand=if command -v tp-desktop >/dev/null 2>&1; then echo "tp-desktop paints the desktop - colours and images both work"; elif command -v feh >/dev/null 2>&1; then echo "feh is installed - images will work"; elif command -v xsetroot >/dev/null 2>&1; then echo "only xsetroot is installed - colour works, images do not"; else echo "no tool to paint the root window"; fi
 
 # --- Language (ThinPro: hptc-i18n-mgr, Appearance) -------------------------
 root/i18n/locale=en_US.UTF-8

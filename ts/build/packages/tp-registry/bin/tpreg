@@ -58,7 +58,9 @@ Environment:
 esc_key()
 {
 	# Make a key safe to use as a literal in a grep -E pattern.
-	echo "$1" | sed -e 's/[][\\.^$*+?(){}|/]/\\&/g'
+	# Not '/': it is not special in a pattern, and GNU grep 3.8+ warns
+	# "stray \ before /" on every key otherwise.
+	echo "$1" | sed -e 's/[][\\.^$*+?(){}|]/\\&/g'
 }
 
 ensure_store()

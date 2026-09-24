@@ -291,35 +291,59 @@ QTabBar::tab:selected {
 
 /* ---- taskbar ------------------------------------------------------------ */
 
+/* ThinPro 8.1's panel: a light strip with a hairline on top, HP blue
+ * glyphs, the hamburger at the left, the tray and a two-line clock at the
+ * right. Same palette as the kiosk sidebar. */
 QWidget#tpTaskbar {
-    background: #CCCCCC;
+    background: #F2F2F2;
+    border-top: 1px solid #C6C6C6;
 }
 
-QWidget#tpTaskbar QPushButton {
+QPushButton#tpTaskbarMenu {
     background: transparent;
     border: none;
     border-radius: 0;
-    color: #333333;
-    font-size: 14px;
-    padding: 4px 12px 4px 12px;
-    min-height: 26px;
+    color: #0096D6;
+    font-size: 24px;
+    min-width: 54px;
+    max-width: 54px;
+    min-height: 44px;
+    padding: 0px;
 }
 
-QWidget#tpTaskbar QPushButton:hover {
-    background: #E8E8E8;
+QPushButton#tpTaskbarMenu:hover,
+QPushButton#tpTaskbarTray:hover {
+    background: #E0E0E0;
 }
 
-QWidget#tpTaskbar QPushButton:pressed,
-QWidget#tpTaskbar QPushButton:checked {
-    background: #0096D6;
-    color: white;
+QPushButton#tpTaskbarMenu:pressed,
+QPushButton#tpTaskbarTray:pressed {
+    background: #D4D4D4;
 }
 
-QWidget#tpTaskbar QLabel {
+QPushButton#tpTaskbarTray {
     background: transparent;
-    color: #333333;
-    font-size: 14px;
-    padding-right: 10px;
+    border: none;
+    border-radius: 0;
+    color: #0F6FA8;
+    font-size: 19px;
+    min-width: 38px;
+    max-width: 38px;
+    min-height: 44px;
+    padding: 0px;
+}
+
+/* No address: the network glyph goes red. */
+QPushButton#tpTaskbarTray[tpOffline="true"] {
+    color: #C0392B;
+}
+
+QLabel#tpTaskbarClock {
+    background: transparent;
+    color: #0F6FA8;
+    font-size: 12px;
+    qproperty-alignment: AlignCenter;
+    padding: 0px 4px 0px 8px;
 }
 
 QMenu {

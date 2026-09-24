@@ -190,11 +190,20 @@ product_config() {
 
 taskbar_pid=
 connmgr_pid=
+desktop_pid=
 mode=
 
 start_shell() {
 	mode=`product_config`
 	log "product configuration: $mode"
+
+	# The standard configuration has a desktop behind everything: the
+	# wallpaper and a launcher per connection (ThinPro's 25desktop hook).
+	# Smart Zero has neither.
+	if [ "$mode" = standard ] && which tp-desktop >/dev/null 2>&1; then
+		tp-desktop &
+		desktop_pid=$!
+	fi
 
 	if [ "$mode" = standard ] \
 	   && [ "`tpreg get root/desktop/showTaskbar 2>/dev/null`" != "0" ] \
@@ -216,10 +225,15 @@ start_shell() {
 					sleep 2
 				done
 			) &
-		else
+			connmgr_pid=$!
+		elif [ -z "$desktop_pid" ]; then
+			# Standard mode normally starts nothing over the desktop:
+			# ThinPro shows the wallpaper and the launchers, and the
+			# connection manager is one click away in the menu. Without
+			# tp-desktop there would be nothing to click, so open it.
 			tp-connmgr --window &
+			connmgr_pid=$!
 		fi
-		connmgr_pid=$!
 	fi
 }
 
@@ -227,13 +241,32 @@ stop_shell() {
 	# The kiosk respawn loop is a subshell with tp-connmgr as its child.
 	# Kill the child first: the loop then sits in its two-second sleep,
 	# which is the window in which it is safe to kill the loop itself.
-	for pid in $connmgr_pid $taskbar_pid; do
+	for pid in $connmgr_pid $taskbar_pid $desktop_pid; do
 		pkill -P $pid 2>/dev/null
 		kill $pid 2>/dev/null
 		pkill -P $pid 2>/dev/null
 	done
 	connmgr_pid=
 	taskbar_pid=
+	desktop_pid=
+}
+
+# ThinPro's 25desktop hook: on a fresh client, one sample connection per
+# client the image carries, so the desktop is not empty. Once only, and
+# never on top of connections someone has already made.
+create_sample_connections() {
+	[ "`tpreg get root/ConnectionManager/createSampleConnections 2>/dev/null`" = 1 ] || return 0
+	if [ -z "`tpreg connections 2>/dev/null`" ]; then
+		for type in firefox freerdp horizon ica; do
+			# Only for clients that are really in the image: pkg hands
+			# a connection to /etc/init.d/<type>.
+			[ -e /etc/init.d/$type ] || [ -L /etc/init.d/$type ] || continue
+			label=`tpreg get root/ConnectionType/$type/coreSettings/label 2>/dev/null`
+			tpreg newconn $type "$label" >/dev/null 2>&1 \
+				&& log "sample connection: $type ($label)"
+		done
+	fi
+	tpreg set root/ConnectionManager/createSampleConnections 0 2>/dev/null
 }
 
 # A fresh login is a user-mode login. Administrator mode left over from an
@@ -244,6 +277,7 @@ tpreg set "root/users/${USER:-user}/adminMode" 0 2>/dev/null
 reload=0
 trap 'reload=1' USR1
 
+create_sample_connections
 start_shell
 
 # --- autostart connections --------------------------------------------------
